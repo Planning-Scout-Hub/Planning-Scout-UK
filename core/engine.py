@@ -10,6 +10,26 @@ import gspread
 from google.auth import default
 from google.oauth2.service_account import Credentials as SACredentials
 import os, json
+import argparse
+
+# ════════════════════════════════════════════════════════════
+# LOAD CLIENT DNA (JSON)
+# ════════════════════════════════════════════════════════════
+parser = argparse.ArgumentParser(description="Run PlanningScout Engine")
+parser.add_argument("--client", required=True, help="Path to client JSON")
+args = parser.parse_args()
+
+with open(args.client, "r", encoding="utf-8") as f:
+    CLIENT_CONFIG = json.load(f)
+
+# The engine now gets all its rules from the JSON file
+SHEET_ID        = CLIENT_CONFIG["sheet_id"]
+WEEKS_TO_SCRAPE = 2  # Hardcoded default for weekly runs
+RETAIL_KEYWORDS = CLIENT_CONFIG["search_keywords"]
+PDF_TRIGGERS    = CLIENT_CONFIG["pdf_triggers"]
+EXCLUDE_WORDS   = CLIENT_CONFIG["exclude_words"]
+MIN_LEAD_SCORE  = CLIENT_CONFIG["min_lead_score"]
+CLIENT_EMAIL_VAR= CLIENT_CONFIG["email_to_secret_name"]
 import email_digest
 import pdfplumber
 
@@ -20,9 +40,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # First run:  WEEKS_TO_SCRAPE = 12  (3 month backfill)
 # Weekly run: WEEKS_TO_SCRAPE = 2
 # ════════════════════════════════════════════════════════════
-SHEET_ID        = "172bpv-b2_nK5ENE1XPk5rWeokvnr1sjHvLBfVzHWh6c"
-WEEKS_TO_SCRAPE = 12
-
 # ── Verified Idox portals only ────────────────────────────
 # Each URL is tested at startup — dead ones are skipped automatically.
 # All use the standard Idox /search.do?action=advanced endpoint.
@@ -279,190 +296,6 @@ COUNCILS = {
     "Kings Lynn":        "https://www.west-norfolk.gov.uk/online-applications",
     "Fenland":           "https://www.fenland.gov.uk/online-applications",
 }
-
-# ── Search keywords — what goes into the portal's description field ──────────
-# Goal: catch any Class E change-of-use refused for out-of-centre location.
-# Mark's insight: the best leads are small change-of-use applications (easy to
-# win on appeal) where refusal was "lack of evidence" / sequential test failure.
-# NOT just supermarkets — gyms, salons, cafes, offices all fall under Class E.
-RETAIL_KEYWORDS = [
-    # ── Core Class E use class terms ─────────────────────────────────────
-    "Class E",          # the main use class umbrella
-    "change of use",    # CoU apps say "change of use to Class E"
-    "use class e",      # alternative phrasing
-
-    # ── Traditional retail ───────────────────────────────────────────────
-    "shop",             # A1/Class E retail unit
-    "retail",           # retail-specific applications
-    "supermarket",      # large format food retail
-    "convenience",      # convenience stores
-    "food store",       # food retail (alternative to supermarket)
-    "discount store",   # Aldi/Lidl type retail
-
-    # ── Food & beverage (Class E) ────────────────────────────────────────
-    "café", "cafe",     # cafes — Class E
-    "restaurant",       # restaurants — Class E
-    "hot food",         # hot food takeaway — Class E boundary
-    "takeaway",         # hot food takeaway
-    "coffee shop",      # coffee shops e.g. Costa
-
-    # ── Health & fitness / personal services (Class E) ───────────────────
-    "gym",              # health & fitness — Class E(d)
-    "fitness",          # fitness studio / health club
-    "hair",             # hair salons — Class E
-    "beauty",           # beauty salons — Class E
-    "nail",             # nail bars — Class E
-    "barber",           # barbers — Class E
-    "health centre",    # health / medical — Class E(e)
-    "clinic",           # GP / dental / medical clinic
-
-    # ── Office / workspace (Class E) ─────────────────────────────────────
-    "office",           # offices — Class E(g)(i)
-    "workspace",        # co-working/flex workspace
-
-    # ── Other relevant types ─────────────────────────────────────────────
-    "sui generis",      # uses outside a class — sequential test often needed
-    "betting",          # betting shops — sui generis, out-of-centre issues
-    "amusement",        # amusement centres — sui generis
-    "car wash",         # car washes often refused for sequential test
-
-    # ── Additional Class E / mixed use terms ─────────────────────
-    "mixed use",        # common in retail-led mixed use schemes
-    "pharmacy",         # Class E(e) health — often refused out-of-centre
-    "optician",         # Class E — common CoU application type
-    "drive-through",    # Class E boundary, sequential test almost always required
-    "drive through",    # alternative spelling (both needed)
-    "food and drink",   # F&B use class grouping in many officer reports
-]
-
-# ── PDF trigger words — searched inside the Decision Notice PDF ──────────────
-# A lead only qualifies if the PDF contains at least one of these.
-# Mark's priority tags (confirmed from real qualified leads):
-#   "out of centre" / "out-of-centre"  — location issue, classic appeal ground
-#   "edge of centre"                   — borderline location, often winnable
-#   "sequential test"                  — applicant didn't prove no sequentially
-#                                        preferable sites exist
-#   "sequential approach"              — same issue, different wording
-#   "retail impact assessment"         — impact not properly assessed
-#   "lack of evidence"                 — MOST WINNABLE: council refused because
-#                                        applicant didn't submit a document.
-#                                        Easy fix on appeal = high value lead.
-PDF_TRIGGERS = [
-    # ════════════════════════════════════════════════════════════════════
-    # MARK'S CONFIRMED GOOD SIGNALS ONLY — v19
-    #
-    # REMOVED (were causing noise — these appear as boilerplate in every
-    # retail decision notice, not actual refusal grounds):
-    #   ✗ "nppf" / "national planning policy framework"
-    #   ✗ "main town centre" / "main town centre use"
-    #   ✗ "primary shopping area" / "primary shopping" / "primary retail"
-    #   ✗ "town centre first" / "town centre boundary"
-    #   ✗ "impact assessment" (generic — keep only "retail impact assessment")
-    #   ✗ "retail impact" (too broad alone)
-    #   ✗ "vitality and viability" (appears in every retail refusal boilerplate)
-    #   ✗ Use class references (class e(a), etc — not refusal grounds)
-    #   ✗ "out of town" / "not in a town centre" (weaker variants)
-    #
-    # KEPT (specific refusal grounds Mark identified as winnable):
-    # ════════════════════════════════════════════════════════════════════
-
-    # ── 1. OUT-OF-CENTRE LOCATION ────────────────────────────────────────
-    # Core appeal ground. Mark's explicit #1 signal.
-    "out of centre",
-    "out-of-centre",
-    "outside the town centre",
-    "outside a defined centre",
-    "edge of centre",
-    "edge-of-centre",
-    "edge of the town centre",
-
-    # ── 2. SEQUENTIAL TEST FAILURE ───────────────────────────────────────
-    # Applicant failed to prove no sequentially preferable town centre
-    # sites exist. Always the core planning appeal ground.
-    # NOTE: "sequential" standalone IS included — Mark's confirmed lead
-    # 25/00622/FUL was found via this exact word in the decision notice.
-    # In planning refusals, "sequential" ONLY refers to the NPPF sequential
-    # approach — it is never ambiguous or generic in this context.
-    "sequential",
-    "sequential test",
-    "sequential approach",
-    "sequential assessment",
-    "sequential preference",
-    "sequential search",
-    "sequential step",
-    "no sequential",
-    "fails the sequential",
-    "failed the sequential",
-    "fail the sequential",
-    "sequentially preferable",
-
-    # ── 3. LACK OF EVIDENCE / FAILURE TO DEMONSTRATE ────────────────────
-    # MARK'S MOST WINNABLE CATEGORY: council refused because applicant
-    # simply didn't submit a required document. Easy fix on appeal.
-    "lack of evidence",
-    "insufficient evidence",
-    "no evidence",
-    "lack of information",
-    "insufficient information",
-    "failure to demonstrate",
-    "failed to demonstrate",
-    "fails to demonstrate",
-    "not demonstrated",
-    "has not demonstrated",
-    "cannot demonstrate",
-    "unable to demonstrate",
-    "no information provided",
-    "no assessment",
-    "has not been submitted",
-    "not been submitted",
-    "not been provided",
-    "has not been provided",
-    "was not submitted",
-    "absence of",
-    "in the absence of",
-
-    # ── 4. RETAIL IMPACT ASSESSMENT ──────────────────────────────────────
-    # Specific: applicant failed to provide a Retail Impact Assessment.
-    # "retail impact" alone NOT included — too often just a policy mention.
-    "retail impact assessment",
-    "retail impact study",
-
-    # ── 5. SPECIFIC TOWN CENTRE HARM FINDINGS ────────────────────────────
-    # Only the specific harm findings — NOT generic "vitality and viability"
-    # which appears in every retail refusal as boilerplate policy citation.
-    "harm to the vitality and viability",
-    "harm to the vitality",
-    "adverse impact on the vitality",
-    "undermine the vitality",
-    "prejudice the vitality",
-
-        # ── 6. NO IDENTIFIED NEED / NEED NOT DEMONSTRATED ────────────────────
-    # MARK'S "LACK OF EVIDENCE" FAMILY — extended.
-    # These are refusals where the council says the applicant didn't prove
-    # there is a need for the use in that location. Identical appeal ground
-    # to "lack of evidence" — easy to address on resubmission or appeal.
-    "no identified need",
-    "no quantitative need",
-    "no qualitative need",
-    "need has not been",
-    "need has not been demonstrated",
-    "no overriding need",
-    "need not been established",
-    "unmet need",
-    "no need has been",
-    "insufficient justification",
-    "failed to justify",
-    "fails to justify",
-    "not justified",
-]
-
-# ── Minimum lead score to write to sheet ─────────────────────────────────────
-# Safety net: any lead scoring below this is discarded even if it matched a
-# trigger. Prevents edge-case noise. Genuine leads score 60+ because they
-# need at least one strong trigger (evidence +25, sequential +20,
-# out-of-centre +15) plus a use class description signal (+8).
-# Score-48 rows (old "only NPPF" junk) can no longer reach this threshold.
-MIN_LEAD_SCORE = 60
 
 HEADERS_HTTP = {
     "User-Agent": (
@@ -2265,39 +2098,9 @@ def process_app(sess, base_url, council, item):
     # Mark confirmed: "discharge of condition" and "approval of details reserved by
     # condition" are not leads, even if refused.
     desc_lower = item["desc"].lower()
-    _not_leads = (
-        "discharge of condition",
-        "discharge of planning condition",
-        "reserved matters",
-        "approval of details",
-        "approval of reserved",
-        "details reserved by condition",
-        "condition discharge",
-        "prior approval",          # permitted development prior approval — not a lead
-        "lawful development",      # LDC application — not a lead
-        "certificate of lawful",
-        "advertisement consent",   # signage only — not a lead
-        "listed building consent", # heritage only — not a lead
-        "tree preservation",       # TPO application — not a lead
-        "hedgerow removal",
-        "non-material amendment",   # minor wording change to an approved app — not a lead
-        "minor material amendment", # s73 variation — amending existing consent
-        "section 73",               # s73 applications — variation of condition
-        "s73",                      # abbreviated form used in many descriptions
-        "screening opinion",        # EIA screening — pre-application, not a decision
-        "scoping opinion",          # EIA scoping — pre-application
-        "environmental impact assessment screening",
-        "prior notification",          # forestry/agri permitted dev — not a lead
-        "class ma",                    # office-to-resi prior approval — not a lead
-        "part 6",                      # agricultural/forestry PD — not a lead
-        "part 7",                      # demolition permitted development — not a lead
-        "notification under",          # catches "notification under Class MA/Part 6" etc
-        "prior notification under",    # belt-and-braces for PNA applications
-        "telecommunications",          # phone masts — not a retail lead
-        "street works",                # highway works — not a lead
-        "temporary structure",         # events/markets — not a lead
-    )
-    if any(bad in desc_lower for bad in _not_leads):
+    if any(bad in desc_lower for bad in EXCLUDE_WORDS):
+        log(f"  ⏭️  Not a project approval (exclude word matched) — skip", 2)
+        return None
         log(f"  ⏭️  Not a project approval (post-approval admin / non-planning) — skip", 2)
         return None
 
@@ -2524,12 +2327,20 @@ def run():
     #      guards against spurious fast crashes triggering email)
     #   3. Send regardless of 0 new leads — weekly_count from sheet still
     #      makes the email useful (shows what was already found)
-    if os.environ.get("GMAIL_APP_PASSWORD"):
-        councils_with_results = sum(1 for n in summary.values() if n >= 0)  # any attempted
+   if os.environ.get("GMAIL_APP_PASSWORD"):
+        councils_with_results = sum(1 for n in summary.values() if n >= 0)
         if run_duration_min < 1.0 and len(grand) == 0:
-            log("⚠️  Run completed in < 1 min with 0 leads — suppressing email (likely startup failure)")
+            log("⚠️  Run completed in < 1 min with 0 leads — suppressing email.")
         else:
             log("\n📧 Sending email digest (run complete)…")
+            
+            # This looks up the specific client's email from GitHub Secrets
+            client_email = os.environ.get(CLIENT_EMAIL_VAR, "")
+            if not client_email:
+                log(f"⚠️ Warning: GitHub Secret {CLIENT_EMAIL_VAR} not found. Email may not send.")
+                
+            os.environ["GMAIL_TO"] = client_email 
+            
             email_digest.send_digest(
                 grand, summary, failed,
                 date_from, date_to,
@@ -2539,8 +2350,8 @@ def run():
                 log_fn=log,
             )
     else:
-        log("ℹ️  Email skipped (Colab mode — set GMAIL_APP_PASSWORD for automated emails)")
-
+        log("ℹ️  Email skipped (Colab mode — set GMAIL_APP_PASSWORD)")
+        
 # ── Authenticate Google ──────────────────────────────────────
 # In GitHub Actions: GCP_SERVICE_ACCOUNT_JSON env var is set — no action needed here.
 # In Colab: trigger interactive auth so default() works.
