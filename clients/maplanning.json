@@ -5,18 +5,39 @@
   "email_to_secret_name": "GMAIL_TO_MAPLANNING",
   "min_lead_score": 60,
   "search_keywords": [
-    "Class E", "change of use", "use class e", "shop", "retail", 
-    "supermarket", "convenience", "food store", "café", "restaurant", 
-    "takeaway", "gym", "fitness", "hair", "beauty", "office", "sui generis"
+    "Class E", "change of use", "use class e", "shop", "retail", "supermarket", 
+    "convenience", "food store", "discount store", "café", "cafe", "restaurant", 
+    "hot food", "takeaway", "coffee shop", "gym", "fitness", "hair", "beauty", 
+    "nail", "barber", "health centre", "clinic", "office", "workspace", 
+    "sui generis", "betting", "amusement", "car wash", "mixed use", "pharmacy", 
+    "optician", "drive-through", "drive through", "food and drink"
   ],
   "pdf_triggers": [
-    "out of centre", "edge of centre", "sequential test", "sequential approach",
-    "lack of evidence", "insufficient evidence", "failure to demonstrate",
-    "retail impact assessment", "harm to the vitality", "no identified need"
+    "out of centre", "out-of-centre", "outside the town centre", "outside a defined centre", 
+    "edge of centre", "edge-of-centre", "edge of the town centre", "sequential", 
+    "sequential test", "sequential approach", "sequential assessment", "sequential preference", 
+    "sequential search", "sequential step", "no sequential", "fails the sequential", 
+    "failed the sequential", "fail the sequential", "sequentially preferable", 
+    "lack of evidence", "insufficient evidence", "no evidence", "lack of information", 
+    "insufficient information", "failure to demonstrate", "failed to demonstrate", 
+    "fails to demonstrate", "not demonstrated", "has not demonstrated", "cannot demonstrate", 
+    "unable to demonstrate", "no information provided", "no assessment", "has not been submitted", 
+    "not been submitted", "not been provided", "has not been provided", "was not submitted", 
+    "absence of", "in the absence of", "retail impact assessment", "retail impact study", 
+    "harm to the vitality and viability", "harm to the vitality", "adverse impact on the vitality", 
+    "undermine the vitality", "prejudice the vitality", "no identified need", "no quantitative need", 
+    "no qualitative need", "need has not been", "need has not been demonstrated", "no overriding need", 
+    "need not been established", "unmet need", "no need has been", "insufficient justification", 
+    "failed to justify", "fails to justify", "not justified"
   ],
   "exclude_words": [
-    "discharge of condition", "reserved matters", "approval of details",
-    "prior approval", "lawful development certificate", "advertisement consent",
-    "tree preservation", "non-material amendment", "section 73"
+    "discharge of condition", "discharge of planning condition", "reserved matters", 
+    "approval of details", "approval of reserved", "details reserved by condition", 
+    "condition discharge", "prior approval", "lawful development", "certificate of lawful", 
+    "advertisement consent", "listed building consent", "tree preservation", "hedgerow removal", 
+    "non-material amendment", "minor material amendment", "section 73", "s73", "screening opinion", 
+    "scoping opinion", "environmental impact assessment screening", "prior notification", 
+    "class ma", "part 6", "part 7", "notification under", "prior notification under", 
+    "telecommunications", "street works", "temporary structure"
   ]
 }
