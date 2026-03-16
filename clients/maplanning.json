@@ -1,7 +1,22 @@
 {
-  "client_name": "MA Planning",
+  "client_id": "maplanning",
+  "client_name": "MAPlanning",
   "sheet_id": "172bpv-b2_nK5ENE1XPk5rWeokvnr1sjHvLBfVzHWh6c",
-  "email_recipient": "office@maplanning.co.uk",
-  "keywords": ["BNG", "Sequential Test", "Appeal"],
-  "weeks_to_backfill": 12
+  "email_to_secret_name": "GMAIL_TO_MAPLANNING",
+  "min_lead_score": 60,
+  "search_keywords": [
+    "Class E", "change of use", "use class e", "shop", "retail", 
+    "supermarket", "convenience", "food store", "café", "restaurant", 
+    "takeaway", "gym", "fitness", "hair", "beauty", "office", "sui generis"
+  ],
+  "pdf_triggers": [
+    "out of centre", "edge of centre", "sequential test", "sequential approach",
+    "lack of evidence", "insufficient evidence", "failure to demonstrate",
+    "retail impact assessment", "harm to the vitality", "no identified need"
+  ],
+  "exclude_words": [
+    "discharge of condition", "reserved matters", "approval of details",
+    "prior approval", "lawful development certificate", "advertisement consent",
+    "tree preservation", "non-material amendment", "section 73"
+  ]
 }
