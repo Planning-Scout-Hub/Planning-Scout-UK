@@ -1,0 +1,25 @@
+name: Run Planning Scout
+on:
+  workflow_dispatch: # Allows you to click a button to start it
+    inputs:
+      client:
+        description: 'Which client to run?'
+        required: true
+        default: 'maplanning'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run Scraper
+        env:
+          GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python core/engine.py ${{ github.event.inputs.client }}
