@@ -1,0 +1,56 @@
+name: MAPlanning — Weekly Scraper
+
+# ── WHEN IT RUNS ─────────────────────────────────────────────
+on:
+  schedule:
+    # Every Monday at 06:00 UTC = 07:00 Spain (winter) / 08:00 (summer)
+    # The scraper takes 60–90 min, so email arrives ~08:00–09:00 Spain time
+    - cron: '0 6 * * 1'
+
+  # Manual trigger — click "Run workflow" in GitHub → Actions tab
+  # Use this for: testing, backfill runs, sending to new client
+  workflow_dispatch:
+    inputs:
+      weeks:
+        description: 'Weeks to scrape back (2 = weekly, 12 = full backfill)'
+        required: false
+        default: '2'
+
+# ── WHAT IT DOES ──────────────────────────────────────────────
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120   # kill after 2h if something hangs
+
+    steps:
+      # 1. Download the repo code
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # 2. Set up Python
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Install Python packages
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # 4. Run the scraper
+      #    - For scheduled runs: uses default 2 weeks
+      #    - For manual runs: uses the 'weeks' input you typed
+      - name: Run MAPlanning scraper
+        env:
+          # Google Sheets auth
+          GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          # Gmail credentials (shared across all clients)
+          GMAIL_FROM:         ${{ secrets.GMAIL_FROM }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          # MAPlanning-specific recipient — set in GitHub Secrets
+          # Value: mark@maplanning.co.uk  (or comma-separated for multiple)
+          GMAIL_TO_MAPLANNING: ${{ secrets.GMAIL_TO_MAPLANNING }}
+        run: |
+          WEEKS=${{ github.event.inputs.weeks || '2' }}
+          echo "▶️  Scraping back $WEEKS weeks for MAPlanning"
+          python core/engine.py maplanning --weeks $WEEKS
