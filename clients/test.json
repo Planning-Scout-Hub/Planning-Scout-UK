@@ -1,1 +1,6 @@
-
+{
+  "client_id": "test",
+  "client_name": "test",
+  "sheet_id": "1sX2Hw2EkVX6_KE33pRnI14hdZeGt9bm4Z15Eu9Nu91s",
+  "email_to_secret_name": "GMAIL_TO_MAPLANNING",
+  "min_lead_score": 60,
