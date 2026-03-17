@@ -1,0 +1,54 @@
+name: Housing Appeals — Weekly Scraper
+
+# ── WHEN IT RUNS ─────────────────────────────────────────────
+on:
+  schedule:
+    # Runs Every Monday at 06:30 UTC (07:30/08:30 Spain)
+    # Staggered 30 mins after MAPlanning to avoid resource limits
+    - cron: '30 6 * * 1'
+
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      weeks:
+        description: 'Weeks to scrape back (2 = weekly, 12 = full backfill)'
+        required: false
+        default: '2'
+
+# ── WHAT IT DOES ──────────────────────────────────────────────
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      # 1. Download the repo code
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # 2. Set up Python
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Install Python packages
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # 4. Run the scraper for Housing & Development Appeals
+      - name: Run Housing scraper
+        env:
+          # Shared Secrets
+          GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          GMAIL_FROM:           ${{ secrets.GMAIL_FROM }}
+          GMAIL_APP_PASSWORD:   ${{ secrets.GMAIL_APP_PASSWORD }}
+          
+          # Client-Specific Recipient
+          # Make sure you have added 'GMAIL_TO_HOUSING' to GitHub Secrets!
+          GMAIL_TO_HOUSING:     ${{ secrets.GMAIL_TO_HOUSING }}
+          
+        run: |
+          WEEKS=${{ github.event.inputs.weeks || '2' }}
+          echo "▶️ Scraping back $WEEKS weeks for Housing & Development Appeals"
+          python core/engine.py housing --weeks $WEEKS
