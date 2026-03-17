@@ -16,15 +16,21 @@ import argparse
 # LOAD CLIENT DNA (JSON)
 # ════════════════════════════════════════════════════════════
 parser = argparse.ArgumentParser(description="Run PlanningScout Engine")
-parser.add_argument("--client", required=True, help="Path to client JSON")
+parser.add_argument("client", help="Client slug (e.g. maplanning) — looks for clients/<slug>.json")
+parser.add_argument("--weeks", type=int, default=2,
+                    help="Weeks to scrape (default 2 for weekly; use 12 for first backfill run)")
 args = parser.parse_args()
 
-with open(args.client, "r", encoding="utf-8") as f:
+# Resolve client JSON path: accepts either a bare slug ('maplanning')
+# or a full path ('clients/maplanning.json')
+client_path = args.client if args.client.endswith(".json") else f"clients/{args.client}.json"
+
+with open(client_path, "r", encoding="utf-8") as f:
     CLIENT_CONFIG = json.load(f)
 
 # The engine now gets all its rules from the JSON file
 SHEET_ID        = CLIENT_CONFIG["sheet_id"]
-WEEKS_TO_SCRAPE = 2  # Hardcoded default for weekly runs
+WEEKS_TO_SCRAPE = args.weeks          # set via --weeks flag; default 2 for weekly runs
 RETAIL_KEYWORDS = CLIENT_CONFIG["search_keywords"]
 PDF_TRIGGERS    = CLIENT_CONFIG["pdf_triggers"]
 EXCLUDE_WORDS   = CLIENT_CONFIG["exclude_words"]
@@ -2327,7 +2333,7 @@ def run():
     #      guards against spurious fast crashes triggering email)
     #   3. Send regardless of 0 new leads — weekly_count from sheet still
     #      makes the email useful (shows what was already found)
-   if os.environ.get("GMAIL_APP_PASSWORD"):
+    if os.environ.get("GMAIL_APP_PASSWORD"):
         councils_with_results = sum(1 for n in summary.values() if n >= 0)
         if run_duration_min < 1.0 and len(grand) == 0:
             log("⚠️  Run completed in < 1 min with 0 leads — suppressing email.")
