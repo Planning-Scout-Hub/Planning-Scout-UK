@@ -2,5 +2,55 @@
   "client_id": "test",
   "client_name": "test",
   "sheet_id": "1sX2Hw2EkVX6_KE33pRnI14hdZeGt9bm4Z15Eu9Nu91s",
-  "email_to_secret_name": "GMAIL_TO_MAPLANNING",
+  "email_to_secret_name": "GMAIL_TO_Test",
   "min_lead_score": 60,
+  "search_keywords": [
+    "Class E", "change of use", "use class e", "shop", "retail", "supermarket", 
+    "convenience", "food store", "discount store", "café", "cafe", "restaurant", 
+    "hot food", "takeaway", "coffee shop", "gym", "fitness", "hair", "beauty", 
+    "nail", "barber", "health centre", "clinic", "office", "workspace", 
+    "sui generis", "betting", "amusement", "car wash", "mixed use", "pharmacy", 
+    "optician", "drive-through", "drive through", "food and drink"
+  ],
+  "pdf_triggers": [
+      "grey belt",
+  "previously developed land within the green belt",
+  "does not constitute grey belt",
+  "grey belt criteria",
+  "nppf paragraph 152",
+
+  "biodiversity net gain",
+  "10% biodiversity",
+  "biodiversity metric",
+  "habitat baseline",
+  "no biodiversity net gain",
+  "fails to achieve the required",
+
+  "nutrient neutrality",
+  "nitrogen neutrality",
+  "phosphorus neutrality",
+  "habitats regulations assessment",
+  "nitrate neutrality",
+  "phosphate neutrality",
+  "cannot demonstrate nutrient",
+
+  "five year housing land supply",
+  "5 year housing land supply",
+  "5yhls",
+  "tilted balance",
+  "paragraph 11d",
+  "housing delivery test",
+  "cannot demonstrate a five year",
+  "housing land supply"
+],
+  "exclude_words": [
+    "discharge of condition", "discharge of planning condition", "reserved matters", 
+    "approval of details", "approval of reserved", "details reserved by condition", 
+    "condition discharge", "prior approval", "lawful development", "certificate of lawful", 
+    "advertisement consent", "listed building consent", "tree preservation", "hedgerow removal", 
+    "non-material amendment", "minor material amendment", "section 73", "s73", "screening opinion", 
+    "scoping opinion", "environmental impact assessment screening", "prior notification", 
+    "class ma", "part 6", "part 7", "notification under", "prior notification under", 
+    "telecommunications", "street works", "temporary structure"
+  ]
+}
