@@ -11,6 +11,7 @@ from google.auth import default
 from google.oauth2.service_account import Credentials as SACredentials
 import os, json
 import argparse
+import intelligence
 
 # ════════════════════════════════════════════════════════════
 # LOAD CLIENT DNA (JSON)
@@ -695,21 +696,14 @@ def write_lead(lead):
 # ════════════════════════════════════════════════════════════
 # SCORING
 # ════════════════════════════════════════════════════════════
-def score_lead(desc, triggers):
-    """
-    Score a qualified lead 0-100 based on how likely it is to be a
-    winnable appeal case that Mark can act on.
-
-    Scoring philosophy (from Mark's feedback):
-      - "Lack of evidence" refusals = highest value (easy to win on appeal)
-      - Out-of-centre + sequential test failure = strong signal
-      - Class E change of use = the target application type
-      - Small single-use apps are MORE winnable than large retail parks
-      - sqm size is NOT a quality signal — small salons/gyms score just as well
-    """
-    s  = 40   # base
-    d  = desc.lower()
-    tw = " ".join(triggers).lower()
+def score_lead(desc, triggers, council=""):   # add council param
+    s = 40
+    # ... all existing scoring logic unchanged ...
+    
+    # Intelligence bonus
+    s += intelligence.intelligence_score_bonus(council, " ".join(triggers))
+    
+    return max(10, min(s, 100))
 
     # ── "Lack of evidence" family — most winnable refusal type ──────────
     _evidence_phrases = (
