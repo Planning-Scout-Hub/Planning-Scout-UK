@@ -1,0 +1,36 @@
+name: Housing Appeals — TEST RUN
+
+on:
+  workflow_dispatch:
+    inputs:
+      weeks:
+        description: 'Weeks to scrape'
+        required: false
+        default: '1'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Housing Test
+        env:
+          GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          GMAIL_FROM:           ${{ secrets.GMAIL_FROM }}
+          GMAIL_APP_PASSWORD:   ${{ secrets.GMAIL_APP_PASSWORD }}
+          # HARDCODED TEST EMAIL:
+          GMAIL_TO_HOUSING:     "inger.balaj@gmail.com"
+          
+        run: |
+          WEEKS=${{ github.event.inputs.weeks || '1' }}
+          python core/engine.py housing --weeks $WEEKS
