@@ -51,5 +51,5 @@ jobs:
           # Value: inger.balaj@gmail.com  (or comma-separated for multiple)
           GMAIL_TO_MAPLANNING: ${{ secrets.GMAIL_TO_MAPLANNING }}
         run: |
-  WEEKS=${{ github.event.inputs.weeks || '2' }}
-  python core/engine.py --client clients/maplanning.json --weeks $WEEKS
+          WEEKS=${{ github.event.inputs.weeks || '2' }}
+          python core/engine.py --client clients/maplanning.json --weeks $WEEKS
