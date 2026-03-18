@@ -20,7 +20,11 @@
     "class q",
     "permitted development",
     "change of use",
-    "conversion"
+    "conversion",
+    "grey belt", 
+    "previously developed land", 
+    "PDL", 
+    "brownfield"
   ],
 
   "pdf_triggers": [
@@ -89,6 +93,11 @@
     "section 106",
     "developer contributions",
     "loss of amenity"
+    "NPPF paragraph 152", 
+    "NPPF paragraph 155", 
+    "degraded land", 
+    "limited contribution to green belt purposes", 
+    "grey belt criteria"
   ],
 
   "exclude_words": [
