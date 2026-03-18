@@ -17,6 +17,7 @@ import argparse
 # ════════════════════════════════════════════════════════════
 parser = argparse.ArgumentParser(description="Run PlanningScout Engine")
 parser.add_argument("--client", required=True, help="Path to client JSON")
+parser.add_argument("--weeks", type=int, default=2, help="Weeks to scrape") # Added this
 args = parser.parse_args()
 
 with open(args.client, "r", encoding="utf-8") as f:
@@ -24,7 +25,7 @@ with open(args.client, "r", encoding="utf-8") as f:
 
 # The engine now gets all its rules from the JSON file
 SHEET_ID        = CLIENT_CONFIG["sheet_id"]
-WEEKS_TO_SCRAPE = 2  # Hardcoded default for weekly runs
+WEEKS_TO_SCRAPE = args.weeks  # This now listens to GitHub Actions
 RETAIL_KEYWORDS = CLIENT_CONFIG["search_keywords"]
 PDF_TRIGGERS    = CLIENT_CONFIG["pdf_triggers"]
 EXCLUDE_WORDS   = CLIENT_CONFIG["exclude_words"]
