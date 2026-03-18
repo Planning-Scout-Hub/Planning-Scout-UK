@@ -858,6 +858,17 @@ def estimate_project_value(desc, council, triggers):
     Returns a string like "£2.1m–£3.4m" or "£500k–£1m"
     """
     d   = desc.lower()
+    # Detect residential unit counts
+    unit_match = re.findall(r'(\d+)\s*(?:dwellings?|houses?|flats?|apartments?|units?)', d)
+    if unit_match:
+        try:
+            units = int(unit_match[0])
+            # Rough estimate: £250k GDV per unit (adjust based on region later)
+            lo = units * 200_000
+            hi = units * 350_000
+            return _fmt_value(int(lo * london_premium)), _fmt_value(int(hi * london_premium))
+        except Exception:
+            pass
     loc = council.lower()
     london_premium = 1.35 if any(b in loc for b in _LONDON_BOROUGHS) else 1.0
 
