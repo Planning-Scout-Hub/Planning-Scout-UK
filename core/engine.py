@@ -2120,9 +2120,12 @@ def process_app(sess, base_url, council, item):
 
     # Pre-filter 1: skip clearly non-refused decisions immediately
     decision_raw = det.get("decision", "").lower().strip()
-    if decision_raw and any(w in decision_raw for w in _APPROVAL_WORDS):
-        log(f"  ⏭️  Decision='{det.get('decision','')}' — not a refusal, skip", 2)
-        return None
+    if decision_raw:
+        # If the portal explicitly says approved/granted, kill it immediately.
+        # DO NOT trust a PDF over an explicit portal approval.
+        if any(w in decision_raw for w in _APPROVAL_WORDS):
+            log(f"  ⏭️  Portal explicitly says '{det.get('decision','')}' — ignoring PDF, skip", 2)
+            return None
 
     # If portal says "Refused" explicitly, log it — scan_pdf is still the final gate
     if decision_raw and any(w in decision_raw for w in ("refus", "refuse")):
