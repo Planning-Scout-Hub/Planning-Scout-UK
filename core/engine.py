@@ -2080,19 +2080,30 @@ def scan_pdf(sess, pdf_url, prefetched_response=None):
         else:
             log(f"  ⚠️  No refusal language found — likely approved/other decision", 2)
 
-        # ── Check 2: retail planning topic trigger words ──────────────
-        found = [w for w in PDF_TRIGGERS if w in text]
-        if found:
-            for w in found:
-                log(f"  🎯 '{w}'", 2)
-        else:
-            log(f"  ❌ No retail trigger words in PDF", 2)
+        # ── Check 2: Proximity-based Trigger Words ──────────────
+        found = []
+        # Anchor words that indicate the actual decision context
+        anchors = ["refuse", "refused", "refusal", "dismiss", "dismissed", "unacceptable", "harm"]
+        
+        for w in PDF_TRIGGERS:
+            if w in text:
+                # Find where the trigger word is in the document
+                trigger_idx = text.find(w)
+                
+                # Create a window of ~100 words (800 chars) around the trigger
+                window_start = max(0, trigger_idx - 800)
+                window_end = min(len(text), trigger_idx + len(w) + 800)
+                window_text = text[window_start:window_end]
+                
+                # Only count the trigger if an anchor word is nearby
+                if any(anchor in window_text for anchor in anchors):
+                    found.append(w)
+                    log(f"  🎯 '{w}' (validated by proximity)", 2)
+                else:
+                    log(f"  ⚠️ '{w}' found, but too far from refusal context — ignoring", 2)
 
-        return found, is_refused
-
-    except Exception as e:
-        log(f"  ⚠️  PDF error: {type(e).__name__}: {e}", 2)
-        return [], False
+        if not found:
+            log(f"  ❌ No validated triggers within proximity of refusal language", 2)
 
 # ════════════════════════════════════════════════════════════
 # PROCESS ONE APPLICATION
