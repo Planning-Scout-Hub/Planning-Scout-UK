@@ -126,6 +126,14 @@
     "commercial",
     "retail",
     "office",
-    "industrial"
+    "industrial",
+    "extension",
+    "conservatory", 
+    "loft conversion",
+    "garage",
+    "outbuilding",
+    "dormer", 
+    "porch",
+    "householder"
   ]
 }
