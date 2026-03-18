@@ -39,4 +39,4 @@ jobs:
         run: |
           WEEKS=${{ github.event.inputs.weeks || '2' }}
           echo "Running Housing scraper for $WEEKS weeks"
-          python core/engine.py housing --weeks $WEEKS
+          python core/engine.py --client clients/housing.json --weeks $WEEKS
