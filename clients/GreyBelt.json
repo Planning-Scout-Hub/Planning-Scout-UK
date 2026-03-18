@@ -1,0 +1,41 @@
+{
+  "config_name": "Grey Belt Alpha Hunter",
+  "version": "1.1.0",
+  "target_policy": "NPPF 2024/25 Paragraph 155",
+  "search_logic": {
+    "primary_keywords": [
+      "Grey Belt",
+      "previously developed land in the Green Belt",
+      "PDL",
+      "NPPF Paragraph 155",
+      "NPPF Paragraph 143"
+    ],
+    "secondary_keywords": [
+      "tilted balance",
+      "Golden Rules",
+      "50% affordable housing",
+      "unmet housing need",
+      "sustainable location",
+      "limited contribution to Green Belt purposes"
+    ],
+    "negative_constraints": [
+      "SSSI",
+      "Area of Outstanding Natural Beauty",
+      "AONB",
+      "National Park",
+      "irreplaceable habitat",
+      "Footnote 7"
+    ]
+  },
+  "scoring_weights": {
+    "grey_belt_mention": 40,
+    "pdl_mention": 30,
+    "unmet_need_reference": 20,
+    "sustainable_location_claim": 10
+  },
+  "filtering_logic": {
+    "status": ["Refused", "Withdrawn"],
+    "min_dwellings": 10,
+    "exclude_footnote_7_sites": true
+  }
+}
