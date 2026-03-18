@@ -48,9 +48,8 @@ jobs:
           GMAIL_FROM:         ${{ secrets.GMAIL_FROM }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           # MAPlanning-specific recipient — set in GitHub Secrets
-          # Value: mark@maplanning.co.uk  (or comma-separated for multiple)
+          # Value: inger.balaj@gmail.com  (or comma-separated for multiple)
           GMAIL_TO_MAPLANNING: ${{ secrets.GMAIL_TO_MAPLANNING }}
         run: |
-          run: |
   WEEKS=${{ github.event.inputs.weeks || '2' }}
   python core/engine.py --client clients/maplanning.json --weeks $WEEKS
