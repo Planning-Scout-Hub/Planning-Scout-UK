@@ -2022,10 +2022,21 @@ _REFUSAL_PHRASES = [
 ]
 
 def scan_pdf(sess, pdf_url, prefetched_response=None):
+    """
+    Download and scan a PDF for:
+      1. Retail/Housing planning trigger words (topic relevance)
+      2. Explicit refusal language (REQUIRED — prevents approved apps slipping through)
+
+    Returns (trigger_words, is_refused):
+      trigger_words  — list of matched PDF_TRIGGERS
+      is_refused     — True only if PDF contains explicit refusal language
+    Both must be non-empty/True for a lead to qualify.
+    """
     log(f"  📥 …{pdf_url[-65:]}", 2)
     try:
         if prefetched_response is not None:
             r = prefetched_response
+            log(f"  (using prefetched response)", 2)
         else:
             r = sess.get(
                 pdf_url,
@@ -2035,44 +2046,81 @@ def scan_pdf(sess, pdf_url, prefetched_response=None):
 
         ct   = r.headers.get("Content-Type", "").lower()
         size = len(r.content)
-        if r.status_code != 200 or "html" in ct or size < 800:
+        log(f"  HTTP {r.status_code} | {size:,}b | {ct[:35]}", 2)
+
+        if r.status_code != 200:
             return [], False
+
+        # Got HTML back = session error / "Document Unavailable"
+        if "html" in ct:
+            snippet = r.text[:300].replace("\n", " ")
+            log(f"  ⚠️  Got HTML (session issue or wrong URL): {snippet[:120]}", 2)
+            return [], False
+
+        if size < 800:
+            log(f"  ⚠️  Too small to be real PDF ({size}b)", 2)
+            return [], False
+
+        # Confirm it's a PDF (magic bytes)
+        if not r.content[:4] == b"%PDF":
+            if size > 5000:
+                log(f"  ⚠️  No PDF magic bytes but large — trying anyway", 2)
+            else:
+                log(f"  ⚠️  Not a PDF", 2)
+                return [], False
 
         text = ""
         with pdfplumber.open(io.BytesIO(r.content)) as pdf:
+            log(f"  {len(pdf.pages)}pp", 2)
             for pg in pdf.pages:
                 t = pg.extract_text()
                 if t:
                     text += t.lower() + " "
 
         if not text.strip():
+            log(f"  ⚠️  No extractable text — scanned image PDF?", 2)
             return [], False
 
-        # ── Check 1: Refusal Language ─────────────────────
+        log(f"  {len(text):,} chars extracted", 2)
+
+        # ── Check 1: is this actually a refusal? ─────────────────────
         is_refused = any(phrase in text for phrase in _REFUSAL_PHRASES)
-        
+        if is_refused:
+            log(f"  ✅ Refusal confirmed in PDF text", 2)
+        else:
+            log(f"  ⚠️  No refusal language found — likely approved/other decision", 2)
+
         # ── Check 2: Proximity-based Trigger Words ──────────────
         found = []
+        # Anchor words that indicate the actual decision context
         anchors = ["refuse", "refused", "refusal", "dismiss", "dismissed", "unacceptable", "harm"]
         
         for w in PDF_TRIGGERS:
             if w in text:
+                # Find where the trigger word is in the document
                 trigger_idx = text.find(w)
-                # 800 chars is roughly the 100-word proximity window
+                
+                # Create a window of ~800 chars (~100 words) around the trigger
                 window_start = max(0, trigger_idx - 800)
                 window_end = min(len(text), trigger_idx + len(w) + 800)
                 window_text = text[window_start:window_end]
                 
+                # Only count the trigger if an anchor word is nearby
                 if any(anchor in window_text for anchor in anchors):
                     found.append(w)
                     log(f"  🎯 '{w}' (validated by proximity)", 2)
+                else:
+                    log(f"  ⚠️ '{w}' found, but too far from refusal context — ignoring", 2)
 
+        if not found:
+            log(f"  ❌ No validated triggers within proximity of refusal language", 2)
+
+        # Final output for this application
         return found, is_refused
 
     except Exception as e:
-        log(f"  ⚠️ PDF Error: {e}", 2)
+        log(f"  ⚠️  Critical error scanning PDF: {e}", 2)
         return [], False
-
 # ════════════════════════════════════════════════════════════
 # PROCESS ONE APPLICATION
 # ════════════════════════════════════════════════════════════
