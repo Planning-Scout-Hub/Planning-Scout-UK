@@ -83,7 +83,7 @@ COUNCILS = {
     # ══ North/East Yorkshire ════════════════════════════════════
     "York":              "https://planningaccess.york.gov.uk/online-applications/",
     "East Riding":       "https://www.eastriding.gov.uk/online-applications",
-    "Hull":              "https://www.hull.gov.uk/online-applications",
+    "Hull":              "https://www.hullcc.gov.uk/padcbc/publicaccess-live/",
     "North Yorkshire":   "https://planning.northyorks.gov.uk/online-applications",
 
     # ══ North East ══════════════════════════════════════════════
@@ -108,7 +108,7 @@ COUNCILS = {
     "Blackpool":         "https://idoxpa.blackpool.gov.uk/online-applications",
     "Cheshire West":     "https://pa.cheshirewestandchester.gov.uk/online-applications",
     "Sefton":            "https://pa.sefton.gov.uk/online-applications",
-    "St Helens":         "https://pa.sthelens.gov.uk/online-applications",
+    "St Helens":         "https://publicaccess.sthelens.gov.uk/online-applications/",
     "Halton":            "https://pa.halton.gov.uk/online-applications",
     "Burnley":           "https://planning.burnley.gov.uk/online-applications",
     "Pendle":            "https://planning.pendle.gov.uk/online-applications",
