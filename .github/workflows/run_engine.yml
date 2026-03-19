@@ -1,1 +1,42 @@
+name: MASTERFILE — Weekly Scraper
 
+on:
+  schedule:
+    # Monday 07:00 UTC (08:00 Spain winter, 09:00 summer)
+    # Offset 1hr from Masterfile run (06:00) so they don't compete for resources
+    - cron: '0 7 * * 1'
+
+  workflow_dispatch:
+    inputs:
+      weeks:
+        description: 'Weeks to scrape back (2 = normal weekly, 12 = first full backfill)'
+        required: false
+        default: '2'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Master scraper
+        env:
+          GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          GMAIL_FROM:               ${{ secrets.GMAIL_FROM }}
+          GMAIL_APP_PASSWORD:       ${{ secrets.GMAIL_APP_PASSWORD }}
+          GMAIL_TO_ADMIN:         ${{ secrets.GMAIL_TO_ADMIN }}
+        run: |
+          WEEKS=${{ github.event.inputs.weeks || '2' }}
+          echo "Running Housing scraper for $WEEKS weeks"
+          python core/engine.py --client clients/master.json --weeks 1
