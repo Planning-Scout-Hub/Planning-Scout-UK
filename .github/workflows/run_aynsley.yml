@@ -20,7 +20,7 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 120   # kill after 2h if something hangs
+    timeout-minutes: 360   # kill after 2h if something hangs
 
     steps:
       # 1. Download the repo code
