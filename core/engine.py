@@ -2037,35 +2037,22 @@ _REFUSAL_PHRASES = [
     "appeal is dismissed",       # appeal decision = original refusal confirmed
 ]
 
-def scan_pdf(sess, pdf_url, prefetched_response=None):
+# Inside engine.py - The Universal Scorer
+def calculate_logic_score(text, logic_requirements):
     """
-    Download and scan a PDF for:
-      1. Retail/Housing planning trigger words (topic relevance)
-      2. Explicit refusal language (REQUIRED — prevents approved apps slipping through)
-
-    Returns (trigger_words, is_refused):
-      trigger_words  — list of matched PDF_TRIGGERS
-      is_refused     — True only if PDF contains explicit refusal language
-    Both must be non-empty/True for a lead to qualify.
+    Instead of hardcoding 'must_have_pdl', this loops through 
+    WHATEVER categories you put in the JSON.
     """
-    log(f"  📥 …{pdf_url[-65:]}", 2)
-    try:
-        if prefetched_response is not None:
-            r = prefetched_response
-            log(f"  (using prefetched response)", 2)
-        else:
-            r = sess.get(
-                pdf_url,
-                headers={"Accept": "application/pdf,*/*", "Referer": pdf_url},
-                timeout=50, allow_redirects=True,
-            )
-
-        ct   = r.headers.get("Content-Type", "").lower()
-        size = len(r.content)
-        log(f"  HTTP {r.status_code} | {size:,}b | {ct[:35]}", 2)
-
-        if r.status_code != 200:
-            return [], False
+    report_hits = {}
+    total_score = 0
+    
+    for category, phrases in logic_requirements.items():
+        # Check if any phrase for this category exists in the PDF text
+        if any(phrase.lower() in text.lower() for phrase in phrases):
+            report_hits[category] = True
+            total_score += 20 # Give weight for matching a logic pillar
+            
+    return report_hits, total_score
 
         # Got HTML back = session error / "Document Unavailable"
         if "html" in ct:
