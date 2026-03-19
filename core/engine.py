@@ -276,20 +276,20 @@ COUNCILS = {
     "Erewash":           "https://www.erewash.gov.uk/online-applications",
     "Amber Valley":      "https://www.ambervalley.gov.uk/online-applications",
     "South Derbyshire":  "https://www.south-derbys.gov.uk/online-applications",
-    "Blaby":             "https://www.blaby.gov.uk/online-applications",
-    "Hinckley Bosworth": "https://www.hinckley-bosworth.gov.uk/online-applications",
-    "Harborough":        "https://www.harborough.gov.uk/online-applications",
+    "Blaby":             "https://pa.blaby.gov.uk/online-applications/",
+    "Hinckley Bosworth": "https://pa.hinckley-bosworth.gov.uk/online-applications/",
+    "Harborough":        "https://pa2.harborough.gov.uk/online-applications/search.do?action=simple&searchType=Application",
 
     # ══ West Midlands (additions) ════════════════════════════════════
-    "Lichfield":         "https://www.lichfielddc.gov.uk/online-applications",
+    "Lichfield":         "https://planning.lichfielddc.gov.uk/online-applications/search.do?action=simple",
     "Cannock Chase":     "https://www.cannockchasedc.gov.uk/online-applications",
     "East Staffordshire":"https://www.eaststaffsbc.gov.uk/online-applications",
 
     # ══ South East (additions) ═══════════════════════════════════════
     "Waverley":          "https://planning.waverley.gov.uk/online-applications",
     "Mole Valley":       "https://www.molevalley.gov.uk/online-applications",
-    "Surrey Heath":      "https://www.surreyheath.gov.uk/online-applications",
-    "Epsom Ewell":       "https://www.epsom-ewell.gov.uk/online-applications",
+    "Surrey Heath":      "https://publicaccess.surreyheath.gov.uk/online-applications/",
+    "Epsom Ewell":       "https://eplanning.epsom-ewell.gov.uk/online-applications/",
     "Spelthorne":        "https://www.spelthorne.gov.uk/online-applications",
 
     # ══ South West (additions) ═══════════════════════════════════════
