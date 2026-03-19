@@ -99,7 +99,7 @@ COUNCILS = {
     "Redcar":            "https://planning.redcar-cleveland.gov.uk/online-applications",
     "Newcastle":         "https://publicaccess.newcastle.gov.uk/online-applications/",
     "Gateshead":         "https://publicaccess.gateshead.gov.uk/online-applications/",
-    "Sunderland":        "https://www.sunderland.gov.uk/online-applications/"
+    "Sunderland":        "https://www.sunderland.gov.uk/online-applications/",
 
     # ══ North West ══════════════════════════════════════════════
     "Knowsley":          "https://publicaccess.knowsley.gov.uk/online-applications",
