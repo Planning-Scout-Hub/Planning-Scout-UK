@@ -1,0 +1,7 @@
+{
+  "client_id": "master",
+  "client_name": "PlanningScout Master DB",
+  "sheet_id": "PASTE_A_NEW_CLEAN_SHEET_ID_HERE",
+  "email_to_secret_name": "GMAIL_TO_ADMIN",
+  "min_lead_score": 0
+}
