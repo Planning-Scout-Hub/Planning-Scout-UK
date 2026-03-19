@@ -1903,7 +1903,7 @@ def _resolve_viewdoc(sess, url, base_url, soup_of_doc_tab=None):
 
         # No permanent URL found — we still have the PDF bytes from this session
         ct = r.headers.get("Content-Type", "").lower()
-        if "pdf" in ct or r.content[:4] == b"%PDF":
+        if "html" in ct:
             log(f"  ⚠️  Session-only URL (bytes available for scan, link may expire)", 2)
             return url, r
 
