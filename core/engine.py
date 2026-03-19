@@ -1809,6 +1809,7 @@ def get_details(sess, base_url, key_val):
 # ════════════════════════════════════════════════════════════
 
 # Document type priority scores (higher = better)
+# Updated default scores
 _DOC_SCORES = {
     "decision notice": 100, "refusal notice":  100,
     "decision letter": 100, "refusal letter":  100,
@@ -1816,6 +1817,15 @@ _DOC_SCORES = {
     "appeal decision":  80, "officer report":   30,
     "committee report": 25, "planning statement": 5,
 }
+
+# Updated refusal phrases (found around Line 333)
+_REFUSAL_PHRASES = [
+    "is refused", "be refused", "hereby refused", "refusal of",
+    "reasons for refusal", "reason for refusal", "refuse planning permission",
+    "refused planning permission", "application is refused",
+    "permission is refused", "appeal is dismissed",
+    "recommendation: refuse", "recommended for refusal", "refusal be granted"
+]
 
 def find_decision_doc(sess, base_url, key_val, custom_scores=None): 
     """
