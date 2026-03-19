@@ -112,9 +112,9 @@ COUNCILS = {
     "Halton":            "https://pa.halton.gov.uk/online-applications",
     "Burnley":           "https://planning.burnley.gov.uk/online-applications",
     "Pendle":            "https://planning.pendle.gov.uk/online-applications",
-    "Chorley":           "https://pa.chorley.gov.uk/online-applications",
-    "West Lancashire":   "https://planning.westlancs.gov.uk/online-applications",
-    "South Ribble":      "https://planning.southribble.gov.uk/online-applications",
+    "Chorley":           "https://planning.chorley.gov.uk/online-applications/search.do?action=simple&searchType=Application",
+    "West Lancashire":   "https://pa.westlancs.gov.uk/online-applications/search.do?action=simple&searchType=Application",
+    "South Ribble":      "https://publicaccess.southribble.gov.uk/online-applications/",
     # Preston: ASP.NET portal — not Idox
     # Warrington: migrated off Idox — not Idox
     # Cheshire East: AdvancedSearch.aspx — not Idox
