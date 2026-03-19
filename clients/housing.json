@@ -4,11 +4,12 @@
   "sheet_id": "1sX2Hw2EkVX6_KE33pRnI14hdZeGt9bm4Z15Eu9Nu91s",
   "email_to_secret_name": "GMAIL_TO_HOUSING",
   "min_lead_score": 60,
+
   "logic_requirements": {
-    "must_have_pdl": ["previously developed land", "pdl", "brownfield"],
+    "must_have_pdl":       ["previously developed land", "pdl", "brownfield"],
     "must_have_greenbelt": ["green belt", "greenbelt", "metropolitan green belt"],
-    "must_have_need": ["housing need", "five year housing land supply", "5yhls", "tilted balance", "unmet need"]
-  }
+    "must_have_need":      ["housing need", "five year housing land supply", "5yhls", "tilted balance", "unmet need"]
+  },
 
   "search_keywords": [
     "residential",
@@ -26,15 +27,15 @@
     "permitted development",
     "change of use",
     "conversion",
-    "grey belt", 
-    "previously developed land", 
-    "PDL", 
-    "Sui Generis", 
-    "HMO", 
-    "co-living", 
-    "BTR (Build to Rent)", 
-    "care home", 
-    "retirement living"
+    "grey belt",
+    "previously developed land",
+    "PDL",
+    "Sui Generis",
+    "HMO",
+    "co-living",
+    "BTR",
+    "care home",
+    "retirement living",
     "brownfield"
   ],
 
@@ -104,10 +105,10 @@
     "section 106",
     "developer contributions",
     "loss of amenity",
-    "NPPF paragraph 152", 
-    "NPPF paragraph 155", 
-    "degraded land", 
-    "limited contribution to green belt purposes", 
+    "NPPF paragraph 152",
+    "NPPF paragraph 155",
+    "degraded land",
+    "limited contribution to green belt purposes",
     "grey belt criteria"
   ],
 
@@ -139,11 +140,11 @@
     "office",
     "industrial",
     "extension",
-    "conservatory", 
+    "conservatory",
     "loft conversion",
     "garage",
     "outbuilding",
-    "dormer", 
+    "dormer",
     "porch",
     "householder"
   ]
