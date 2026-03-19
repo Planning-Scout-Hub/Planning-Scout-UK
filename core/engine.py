@@ -2038,31 +2038,25 @@ _REFUSAL_PHRASES = [
 ]
 
 # Inside engine.py - The Universal Scorer
-def calculate_logic_score(text, logic_requirements):
+def calculate_advanced_logic(text, config):
     """
-    Instead of hardcoding 'must_have_pdl', this loops through 
-    WHATEVER categories you put in the JSON.
+    The Universal Brain: Checks ANY logic requirement defined in the JSON.
     """
-    report_hits = {}
-    total_score = 0
+    logic_requirements = config.get("logic_requirements", {})
+    hits = []
     
     for category, phrases in logic_requirements.items():
-        # Check if any phrase for this category exists in the PDF text
         if any(phrase.lower() in text.lower() for phrase in phrases):
-            report_hits[category] = True
-            total_score += 20 # Give weight for matching a logic pillar
+            hits.append(category)
             
-    return report_hits, total_score
+    return hits
 
-        # Got HTML back = session error / "Document Unavailable"
-        if "html" in ct:
-            snippet = r.text[:300].replace("\n", " ")
-            log(f"  ⚠️  Got HTML (session issue or wrong URL): {snippet[:120]}", 2)
-            return [], False
+# Inside your main loop where you process the PDF:
+logic_hits = calculate_advanced_logic(pdf_text, CLIENT_CONFIG)
 
-        if size < 800:
-            log(f"  ⚠️  Too small to be real PDF ({size}b)", 2)
-            return [], False
+# If the JSON has 'must_have_all': true, we filter strictly.
+# Otherwise, we just add the hits to the spreadsheet.
+lead_score = len(logic_hits) * 20
 
         # Confirm it's a PDF (magic bytes)
         if not r.content[:4] == b"%PDF":
