@@ -1,13 +1,14 @@
 {
   "client_id": "housing",
-  "client_name": "Housing & Residential Planning",
+  "client_name": "Housing & Grey Belt Specialist",
   "sheet_id": "1sX2Hw2EkVX6_KE33pRnI14hdZeGt9bm4Z15Eu9Nu91s",
   "email_to_secret_name": "GMAIL_TO_HOUSING",
   "min_lead_score": 60,
-
+  "appeal_window_days": 182,
   "logic_requirements": {
-    "must_have_pdl":       ["previously developed land", "pdl", "brownfield"],
+    "must_have_pdl":       ["previously developed land", "pdl", "brownfield", "existing buildings"],
     "must_have_greenbelt": ["green belt", "greenbelt", "metropolitan green belt"],
+    "is_greybelt":         ["paragraph 152", "paragraph 155", "grey belt", "limited contribution"],
     "must_have_need":      ["housing need", "five year housing land supply", "5yhls", "tilted balance", "unmet need"]
   },
 
