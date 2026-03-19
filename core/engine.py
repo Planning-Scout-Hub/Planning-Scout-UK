@@ -225,19 +225,19 @@ COUNCILS = {
     "Gateshead":         "https://planning.gateshead.gov.uk/online-applications",
 
     # ══ West Midlands (additions) ════════════════════════════════════
-    "Sandwell":          "https://www.sandwell.gov.uk/online-applications",
+    "Sandwell":          "https://webcaps.sandwell.gov.uk/publicaccess/",
     "Stoke-on-Trent":    "https://www.stoke.gov.uk/online-applications",
     "Tamworth":          "https://www.tamworth.gov.uk/online-applications",
 
     # ══ East Midlands (additions) ════════════════════════════════════
-    "Gedling":           "https://www.gedling.gov.uk/online-applications",
-    "Broxtowe":          "https://www.broxtowe.gov.uk/online-applications",
-    "Mansfield":         "https://www.mansfield.gov.uk/online-applications",
-    "Rushcliffe":        "https://www.rushcliffe.gov.uk/online-applications",
-    "Newark":            "https://www.newark-sherwooddc.gov.uk/online-applications",
+    "Gedling":           "https://pawam.gedling.gov.uk/online-applications/",
+    "Broxtowe":          "https://publicaccess.broxtowe.gov.uk/online-applications/",
+    "Mansfield":         "https://planning.mansfield.gov.uk/online-applications/",
+    "Rushcliffe":        "https://planningon-line.rushcliffe.gov.uk/online-applications/",
+    "Newark":            "https://publicaccess.newark-sherwooddc.gov.uk/online-applications/",
 
     # ══ East of England (additions) ══════════════════════════════════
-    "Brentwood":         "https://www.brentwood.gov.uk/online-applications",
+    "Brentwood":         "https://publicaccess.brentwood.gov.uk/online-applications/",
     "Epping Forest":     "https://www.eppingforestdc.gov.uk/online-applications",
 
     # ══ London ═══════════════════════════════════════════════════════
@@ -268,7 +268,7 @@ COUNCILS = {
     # ══ North West (additions) ══════════════════════════════════════
     "Wyre":              "https://planning.wyre.gov.uk/online-applications",
     "Fylde":             "https://www.fylde.gov.uk/online-applications",
-    "Rossendale":        "https://planning.rossendale.gov.uk/online-applications",
+    "Rossendale":        "https://publicaccess.rossendale.gov.uk/online-applications/",
     "Hyndburn":          "https://planning.hyndburn.gov.uk/online-applications",
     "Ribble Valley":     "https://www.ribblevalley.gov.uk/online-applications",
 
