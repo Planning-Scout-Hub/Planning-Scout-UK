@@ -1,18 +1,30 @@
 {
-  "name": "Aynsley_Strategic_Rural",
-  "target_keywords": [
-    "Agricultural", "Barn conversion", "Holiday let", "Tourism", 
-    "National Park", "Green Belt", "Class Q", "Class R", "Shed", 
-    "Stable", "Rural exception", "AONB", "Coastal"
+  "client_id": "aynsley_planning",
+  "client_name": "Aynsley Planning Strategic",
+  "sheet_id": "1x7HePZRM5OUEhbxFbPxKpza7yUFqGLa1ZZii8TEI-pI",
+  "email_to_secret_name": "GMAIL_TO_AYNSLEY",
+  "min_lead_score": 55,
+  "search_keywords": [
+    "residential", "dwelling", "dwellings", "new home", "housing",
+    "agricultural", "barn conversion", "holiday let", "tourism", 
+    "tourism development", "rural worker", "stable", "equestrian",
+    "class q", "class r", "prior approval", "change of use",
+    "national park", "AONB", "listed building", "conservation area",
+    "holy island", "northumberland national park", "coastal", "heritage"
   ],
-  "exclusion_keywords": [
-    "Discharge of condition", "Non-material amendment", "Tree works"
+  "pdf_triggers": [
+    "harm to openness", "green belt", "very special circumstances", 
+    "harm to the character", "landscape and visual", "LVIA",
+    "isolated home", "countryside", "paragraph 80", "paragraph 84",
+    "tilted balance", "nppf 11", "5 year housing", "5yhls",
+    "sequential", "impact on the aterbury", "heritage asset",
+    "loss of agricultural", "essential need", "lack of evidence",
+    "failure to demonstrate", "insufficient information",
+    "unsustainable location", "harm to the setting", "openness of the green belt"
   ],
-  "min_units": 1,
-  "scoring_logic": {
-    "refusal_bonus": 50,
-    "national_park_bonus": 30,
-    "sequential_test_fail": 40,
-    "heritage_bonus": 20
-  }
+  "exclude_words": [
+    "discharge of condition", "non-material amendment", "tree preservation",
+    "tpo", "advertisement consent", "screening opinion", "scoping opinion",
+    "minor material amendment", "s73", "section 73", "telecommunications"
+  ]
 }
