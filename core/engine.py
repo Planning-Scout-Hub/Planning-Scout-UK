@@ -31,6 +31,11 @@ PDF_TRIGGERS    = CLIENT_CONFIG["pdf_triggers"]
 EXCLUDE_WORDS   = CLIENT_CONFIG["exclude_words"]
 MIN_LEAD_SCORE  = CLIENT_CONFIG["min_lead_score"]
 CLIENT_EMAIL_VAR= CLIENT_CONFIG["email_to_secret_name"]
+# ── Client type controls scoring logic ───────────────────────────────────────
+# "retail"  → MAPlanning mode: Class E, sequential test, retail impact
+# "rural"   → Aynsley mode:    NP/AONB, agricultural, barn conversion, heritage
+# Default "retail" if not specified (backwards compatible with all existing configs)
+CLIENT_TYPE     = CLIENT_CONFIG.get("client_type", "retail")
 import email_digest
 import pdfplumber
 
@@ -704,25 +709,33 @@ def write_lead(lead):
         return False
 
 # ════════════════════════════════════════════════════════════
-# SCORING
+# SCORING  — client-type-aware dispatcher
+# Adding a new client type: add a new _score_X() function below
+# and register it in score_lead()'s if/elif block.
 # ════════════════════════════════════════════════════════════
-def score_lead(desc, triggers):
+def score_lead(desc, triggers, client_type=None):
     """
-    Score a qualified lead 0-100 based on how likely it is to be a
-    winnable appeal case that Mark can act on.
+    Dispatcher — routes to the correct scoring function based on client_type.
+    Falls back to the CLIENT_TYPE global if not passed explicitly.
+    """
+    ct = (client_type or CLIENT_TYPE or "retail").lower()
+    if ct == "rural":
+        return _score_rural(desc, triggers)
+    else:
+        return _score_retail(desc, triggers)
 
-    Scoring philosophy (from Mark's feedback):
-      - "Lack of evidence" refusals = highest value (easy to win on appeal)
-      - Out-of-centre + sequential test failure = strong signal
-      - Class E change of use = the target application type
-      - Small single-use apps are MORE winnable than large retail parks
-      - sqm size is NOT a quality signal — small salons/gyms score just as well
+
+# ── Retail scorer (MAPlanning — Class E, sequential test) ──────────────────
+def _score_retail(desc, triggers):
     """
-    s  = 40   # base
+    Score for retail/Class E appeal consultants.
+    Calibrated from Mark (MAPlanning) feedback.
+    """
+    s  = 40
     d  = desc.lower()
     tw = " ".join(triggers).lower()
 
-    # ── "Lack of evidence" family — most winnable refusal type ──────────
+    # Evidence failure family — most winnable refusal type
     _evidence_phrases = (
         "lack of evidence", "insufficient evidence", "no evidence",
         "lack of information", "insufficient information",
@@ -733,17 +746,16 @@ def score_lead(desc, triggers):
         "has not been submitted", "not been provided", "has not been provided",
         "was not submitted", "not been submitted",
         "absence of", "in the absence of",
-        # ── New: need family (same scoring tier) ──────────────────
         "no identified need", "no quantitative need", "no qualitative need",
         "need has not been demonstrated", "no overriding need",
         "insufficient justification", "failed to justify", "not justified",
     )
     for w in _evidence_phrases:
         if w in tw:
-            s += 25   # massive bonus — Mark explicitly called these out
-            break     # only count once
+            s += 25
+            break
 
-    # ── Sequential test failure — core NPPF appeal ground ──────────────
+    # Sequential test failure
     _seq_phrases = (
         "sequential test", "sequential approach", "sequential assessment",
         "sequential preference", "sequential search", "sequential step",
@@ -756,7 +768,7 @@ def score_lead(desc, triggers):
             break
     if "no sequential" in tw: s += 15
 
-    # ── Out-of-centre location ───────────────────────────────────────────
+    # Out-of-centre location
     _outofcentre = (
         "out of centre", "out-of-centre", "outside the town centre",
         "outside a defined centre", "out of town", "out-of-town",
@@ -766,16 +778,13 @@ def score_lead(desc, triggers):
         if w in tw:
             s += 15
             break
-    _edgeofcentre = (
-        "edge of centre", "edge-of-centre",
-        "edge of the town centre",
-    )
+    _edgeofcentre = ("edge of centre", "edge-of-centre", "edge of the town centre")
     for w in _edgeofcentre:
         if w in tw:
             s += 10
             break
 
-    # ── Retail impact not assessed ───────────────────────────────────────
+    # Retail impact
     if "retail impact assessment" in tw or "retail impact study" in tw: s += 15
     elif "retail impact"          in tw:                                 s += 10
     elif "impact assessment"      in tw:                                 s += 8
@@ -786,8 +795,6 @@ def score_lead(desc, triggers):
         if w in tw:
             s += 8
             break
-
-    # ── Vitality & viability ─────────────────────────────────────────────
     for w in ("vitality and viability", "vitality or viability",
               "health of the town centre", "undermine the vitality",
               "prejudice the vitality"):
@@ -795,28 +802,23 @@ def score_lead(desc, triggers):
             s += 5
             break
 
-    # ── Description signals — use type ──────────────────────────────────
+    # Description signals
     if "class e"        in d: s += 10
     if "use class e"    in d: s += 10
     if "change of use"  in d: s += 8
-
-    # Specific Class E sub-types Mark mentioned as good leads
     for w in ("gym", "fitness", "hair", "beauty", "salon",
               "nail", "barber", "café", "cafe", "coffee",
               "restaurant", "hot food", "takeaway", "office", "clinic"):
         if w in d:
             s += 5
             break
-
-    # Traditional retail — valuable but not prioritised over small CoU
     if "supermarket"  in d: s += 8
     if "food store"   in d: s += 8
     if "retail park"  in d: s += 5
     if "convenience"  in d: s += 5
     if "shop"         in d: s += 3
 
-    # ── Penalise non-lead application types ──────────────────────────────
-    # Mark explicitly: discharge of conditions / reserved matters = NOT leads
+    # Penalise non-leads
     for bad in (
         "discharge of condition", "discharge of planning condition",
         "reserved matters", "approval of details", "condition discharge",
@@ -825,7 +827,220 @@ def score_lead(desc, triggers):
         "certificate of lawful",
     ):
         if bad in d:
-            s -= 60   # always results in score below 10 minimum
+            s -= 60
+            break
+
+    return max(10, min(s, 100))
+
+
+# ── Rural scorer (Aynsley Planning — NP, agricultural, heritage) ───────────
+def _score_rural(desc, triggers):
+    """
+    Score for rural / full-service planning consultants like Aynsley Planning.
+
+    Scoring tiers calibrated to John's practice:
+    Tier 1 (+25): Evidence failure — always winnable, any sector
+    Tier 2 (+22): Para 84/80 exceptional quality — highest fee, rare
+    Tier 2 (+20): National Park / AONB — John's proven specialism
+    Tier 2 (+20): Sequential test failure — strong predictable ground
+    Tier 3 (+18): Barn conversion structural failure (Class Q/R)
+    Tier 3 (+15): Agricultural functional need failure
+    Tier 3 (+16): Heritage asset refusal
+    Tier 3 (+12): Green belt / countryside encroachment
+    Tier 4 (+10): Enforcement notices (quick cash instructions)
+    Tier 4 (+8):  Landscape/visual impact only (lower win rate)
+    Tier 4 (+8):  Housing supply / tilted balance
+    """
+    s  = 40
+    d  = desc.lower()
+    tw = " ".join(triggers).lower()
+
+    # TIER 1: Evidence failure (+25) — same in every sector
+    _evidence_phrases = (
+        "lack of evidence", "insufficient evidence", "no evidence has been",
+        "failure to demonstrate", "failed to demonstrate", "fails to demonstrate",
+        "not been demonstrated", "has not been demonstrated",
+        "insufficient information", "no information has been provided",
+        "has not been provided", "not been submitted", "in the absence of",
+        "not justified", "fails to justify", "failed to justify",
+        "insufficient justification",
+    )
+    for w in _evidence_phrases:
+        if w in tw:
+            s += 25
+            break
+
+    # TIER 2: Para 84 / Para 80 — exceptional quality homes (+22)
+    # John's highest-value cases. Long commissions, architect-led, high spec.
+    _para84_phrases = (
+        "paragraph 84", "para 84", "paragraph 80", "para 80",
+        "exceptional quality", "outstanding design",
+        "design fails to meet", "does not meet the criteria of paragraph",
+        "fails to meet the criteria",
+    )
+    for w in _para84_phrases:
+        if w in tw or w in d:
+            s += 22
+            break
+
+    # TIER 2: National Park / AONB location (+20)
+    # John has proven NP track record. Fewer competitors. Clients need specialists.
+    _np_phrases = (
+        "national park", "northumberland national park", "aonb",
+        "area of outstanding natural beauty", "sssi",
+        "site of special scientific interest", "scheduled ancient monument",
+    )
+    for w in _np_phrases:
+        if w in tw or w in d:
+            s += 20
+            break
+
+    # TIER 2: Sequential test failure (+20)
+    _seq_phrases = (
+        "sequential test", "sequential approach", "sequential preference",
+        "sequential assessment", "fails the sequential", "sequentially preferable",
+    )
+    for w in _seq_phrases:
+        if w in tw:
+            s += 20
+            break
+
+    # TIER 3: Barn conversion / Class Q/R structural failure
+    # "Not capable of conversion" is THE classic Class Q refusal — very winnable.
+    # Split into two sub-tiers:
+    #   +22 for the specific "not capable / rebuild" phrases (clearest grounds)
+    #   +18 for other structural failure language
+    _conversion_strong = (
+        "not capable of conversion",
+        "capable of conversion without substantial reconstruction",
+        "rebuild rather than conversion",
+        "not a conversion",
+        "reconstruction rather than",
+    )
+    _conversion_other = (
+        "structural integrity", "extent of demolition", "substantial reconstruction",
+    )
+    for w in _conversion_strong:
+        if w in tw:
+            s += 22
+            break
+    else:
+        for w in _conversion_other:
+            if w in tw:
+                s += 18
+                break
+
+    # TIER 3: Agricultural / rural worker need failure (+15)
+    _need_phrases = (
+        "functional need", "lack of functional need",
+        "essential need", "agricultural need", "rural worker dwelling",
+        "occupational need", "financial viability of the holding",
+        "functional test", "financial test",
+        "business plan has not been provided",
+    )
+    for w in _need_phrases:
+        if w in tw:
+            s += 15
+            break
+
+    # TIER 3: Heritage refusal (+16)
+    # John has worked with NP authority and Historic England.
+    _heritage_phrases = (
+        "heritage asset", "setting of the listed building",
+        "less than substantial harm", "substantial harm to",
+        "significance of the heritage asset",
+        "character and appearance of the conservation area",
+        "scheduled ancient monument", "historic environment",
+    )
+    for w in _heritage_phrases:
+        if w in tw:
+            s += 16
+            break
+
+    # TIER 3: Green belt / countryside encroachment (+12)
+    _gb_phrases = (
+        "very special circumstances", "inappropriate development in the green belt",
+        "harm to the openness", "openness of the green belt",
+        "encroachment into the countryside",
+    )
+    for w in _gb_phrases:
+        if w in tw:
+            s += 12
+            break
+
+    # TIER 3: Isolated dwelling — para 80 signal (+12)
+    _isolated_phrases = (
+        "isolated home in the countryside", "isolated dwelling",
+        "isolated location", "no functional relationship",
+    )
+    for w in _isolated_phrases:
+        if w in tw or w in d:
+            s += 12
+            break
+
+    # TIER 4: Enforcement / regularisation (+10)
+    # Listed as core Aynsley service. Quick turnaround, cash-positive.
+    _enforcement_phrases = (
+        "enforcement notice", "breach of condition",
+        "breach of planning control", "unauthorised development",
+    )
+    for w in _enforcement_phrases:
+        if w in d or w in tw:
+            s += 10
+            break
+
+    # TIER 4: Landscape / visual impact only (+8)
+    # Hardest refusal to overturn — councils have wide discretion. Score but don't prioritise.
+    _landscape_phrases = (
+        "landscape and visual impact", "lvia",
+        "harm to the character", "harm to the setting",
+        "harm to the landscape", "adverse effect on the landscape",
+        "intrusive in the landscape", "prominent and intrusive",
+    )
+    for w in _landscape_phrases:
+        if w in tw:
+            s += 8
+            break
+
+    # TIER 4: Housing supply / tilted balance (+8)
+    _housing_phrases = (
+        "5-year housing supply", "five-year housing land supply",
+        "housing land supply", "tilted balance", "nppf paragraph 11", "paragraph 11d",
+    )
+    for w in _housing_phrases:
+        if w in tw:
+            s += 8
+            break
+
+    # Description type bonuses
+    if any(w in d for w in ("barn conversion", "barn to", "redundant barn",
+                             "agricultural building to", "class q", "class r")):
+        s += 10
+    elif any(w in d for w in ("rural worker", "agricultural worker", "essential worker")):
+        s += 8
+    elif any(w in d for w in ("holiday let", "shepherd hut", "glamping",
+                               "tourism", "holiday accommodation")):
+        s += 7
+    elif any(w in d for w in ("listed building", "conservation area")):
+        s += 6
+    elif any(w in d for w in ("residential", "dwelling", "new home")):
+        s += 4
+    elif "change of use" in d:
+        s += 4
+
+    # Penalise definitively non-lead types
+    for bad in (
+        "discharge of condition", "discharge of planning condition",
+        "reserved matters", "approval of details", "condition discharge",
+        "details reserved by condition", "approval of reserved",
+        "lawful development certificate", "certificate of lawful",
+        "non-material amendment", "minor material amendment",
+        "advertisement consent", "tree preservation order",
+        "single storey rear extension", "single-storey rear extension",
+        "rear extension to", "householder application",
+    ):
+        if bad in d:
+            s -= 50
             break
 
     return max(10, min(s, 100))
@@ -834,70 +1049,74 @@ def score_lead(desc, triggers):
 # SALES INTELLIGENCE ENRICHMENT
 # ════════════════════════════════════════════════════════════
 
-# Build rate per sqm by use type (conservative UK estimates, £/sqm)
-_BUILD_RATES = {
-    "supermarket":    1800,
-    "food store":     1800,
-    "retail park":    1200,
-    "retail":         1100,
-    "class e":        1000,
-    "mixed use":      1400,
-    "restaurant":     1600,
-    "convenience":    1100,
-    "comparison":     1000,
-    "shop":           1000,
+# Build rates by client type
+_BUILD_RATES_RETAIL = {
+    "supermarket":   1800, "food store":  1800, "retail park": 1200,
+    "retail":        1100, "class e":     1000, "mixed use":   1400,
+    "restaurant":    1600, "convenience": 1100, "comparison":  1000,
+    "shop":          1000,
 }
+
+_BUILD_RATES_RURAL = {
+    "dwelling":            1800, "dwellings":         1800,
+    "residential":         1700, "new home":          1750,
+    "housing":             1700, "barn conversion":   1400,
+    "class q":             1300, "class r":           1100,
+    "agricultural building": 1200, "holiday":          900,
+    "shepherd hut":         600, "glamping":           600,
+    "tourism":              900, "stable":             700,
+    "equestrian":           700,
+}
+
 _LONDON_BOROUGHS = {
     "westminster","camden","southwark","ealing","islington","hackney",
     "lewisham","lambeth","newham","croydon","barnet","enfield","brent",
     "tower hamlets","greenwich","waltham forest","wandsworth","haringey",
 }
 
+_NE_COUNCILS = {
+    "northumberland","newcastle","sunderland","durham","gateshead",
+    "north tyneside","south tyneside","middlesbrough","darlington",
+    "stockton","hartlepool","redcar",
+}
+
+
 def estimate_project_value(desc, council, triggers):
     """
-    Estimate construction value from:
-    1. Floor area (sqm) × build rate per use type
-    2. If no sqm found, use keyword-based banding
-    Returns a string like "£2.1m–£3.4m" or "£500k–£1m"
+    Routes to retail or rural value estimator based on CLIENT_TYPE.
+    Returns (lo_string, hi_string) e.g. ("\u00a3120k", "\u00a3350k").
     """
     d   = desc.lower()
-    # Detect residential unit counts
-    unit_match = re.findall(r'(\d+)\s*(?:dwellings?|houses?|flats?|apartments?|units?)', d)
-    if unit_match:
-        try:
-            units = int(unit_match[0])
-            # Rough estimate: £250k GDV per unit (adjust based on region later)
-            lo = units * 200_000
-            hi = units * 350_000
-            return _fmt_value(int(lo * london_premium)), _fmt_value(int(hi * london_premium))
-        except Exception:
-            pass
     loc = council.lower()
     london_premium = 1.35 if any(b in loc for b in _LONDON_BOROUGHS) else 1.0
+    ne_discount    = 0.90 if any(b in loc for b in _NE_COUNCILS)     else 1.0
 
-    # Detect build rate
-    rate = 1000  # default
-    for kw, r in _BUILD_RATES.items():
+    ct = (CLIENT_TYPE or "retail").lower()
+    if ct == "rural":
+        return _estimate_value_rural(d, ne_discount)
+    else:
+        return _estimate_value_retail(d, london_premium)
+
+
+def _estimate_value_retail(d, london_premium):
+    """Retail/Class E construction value estimate."""
+    rate = 1000
+    for kw, r in _BUILD_RATES_RETAIL.items():
         if kw in d:
             rate = r
             break
-
     rate = int(rate * london_premium)
 
-    # Try to find sqm
     sqm_match = re.findall(
-        r'(\d[\d,]*)\s*(?:sq\.?\s*m(?:etres?)?|sqm|m2|square\s+metre)', d
+        r'(\d[\d,]*)\s*(?:sq\.?\s*m(?:etres?)?|sqm|m2|square\s+metre)', d
     )
     if sqm_match:
         try:
             sqm = int(sqm_match[0].replace(",",""))
-            lo  = sqm * rate
-            hi  = sqm * int(rate * 1.3)
-            return _fmt_value(lo), _fmt_value(hi)
+            return _fmt_value(sqm * rate), _fmt_value(sqm * int(rate * 1.3))
         except Exception:
             pass
 
-    # No sqm — band by keywords
     if any(w in d for w in ["major","superstore","supermarket","retail park","district centre"]):
         lo, hi = 3_000_000, 15_000_000
     elif any(w in d for w in ["food store","convenience","large format"]):
@@ -907,26 +1126,69 @@ def estimate_project_value(desc, council, triggers):
     else:
         lo, hi = 150_000, 750_000
 
-    lo = int(lo * london_premium)
-    hi = int(hi * london_premium)
-    return _fmt_value(lo), _fmt_value(hi)
+    return _fmt_value(int(lo * london_premium)), _fmt_value(int(hi * london_premium))
+
+
+def _estimate_value_rural(d, ne_discount):
+    """Rural construction value for Northumberland / North East projects."""
+    unit_match = re.findall(
+        r'(\d+)\s*(?:dwellings?|new homes?|houses?|apartments?|flats?|units?)', d
+    )
+    if unit_match:
+        try:
+            units = int(unit_match[0])
+            return (_fmt_value(int(units * 220_000 * ne_discount)),
+                    _fmt_value(int(units * 320_000 * ne_discount)))
+        except Exception:
+            pass
+
+    if any(w in d for w in ["paragraph 84","para 84","paragraph 80","exceptional quality","outstanding design"]):
+        lo, hi = 500_000, 2_000_000
+    elif any(w in d for w in ["barn conversion","class q","class r","agricultural building to"]):
+        lo, hi = 120_000, 350_000
+    elif any(w in d for w in ["rural worker","agricultural worker","isolated dwelling"]):
+        lo, hi = 200_000, 450_000
+    elif any(w in d for w in ["listed building","heritage","conservation area"]):
+        lo, hi = 150_000, 600_000
+    elif any(w in d for w in ["shepherd hut","glamping","holiday accommodation"]):
+        lo, hi = 25_000, 120_000
+    elif any(w in d for w in ["equestrian","stable"]):
+        lo, hi = 30_000, 150_000
+    elif any(w in d for w in ["residential","dwelling","housing","new home"]):
+        lo, hi = 180_000, 500_000
+    else:
+        lo, hi = 80_000, 250_000
+
+    return _fmt_value(int(lo * ne_discount)), _fmt_value(int(hi * ne_discount))
+
 
 def _fmt_value(n):
     if n >= 1_000_000:
-        return f"£{n/1_000_000:.1f}m"
-    return f"£{n//1000}k"
+        return f"\u00a3{n/1_000_000:.1f}m"
+    return f"\u00a3{n//1000}k"
+
 
 def impact_probability(desc, triggers, score):
     """
-    0–100 probability that this project needs a formal retail impact study.
-    Based on NPPF threshold indicators and trigger word strength.
+    Routes to the correct secondary metric based on CLIENT_TYPE.
+    Retail -> retail impact study probability (0-100).
+    Rural  -> appeal urgency score (0-100): how quickly John should act.
+    Column label stays 'Impact Probability' in the sheet for both.
     """
+    ct = (CLIENT_TYPE or "retail").lower()
+    if ct == "rural":
+        return _appeal_urgency(desc, triggers, score)
+    else:
+        return _retail_impact_probability(desc, triggers, score)
+
+
+def _retail_impact_probability(desc, triggers, score):
+    """Probability of needing a formal retail impact study."""
     d  = desc.lower()
     tw = " ".join(triggers).lower() if triggers else ""
-    p  = 40  # base
+    p  = 40
 
-    # Size indicators (main NPPF trigger: >2500 sqm needs full RIA)
-    sqm_m = re.findall(r'(\d[\d,]*)\s*(?:sq\.?\s*m|sqm|m2)', d)
+    sqm_m = re.findall(r'(\d[\d,]*)\s*(?:sq\.?\s*m|sqm|m2)', d)
     if sqm_m:
         try:
             sqm = int(sqm_m[0].replace(",",""))
@@ -936,23 +1198,58 @@ def impact_probability(desc, triggers, score):
         except Exception:
             pass
 
-    # Use type
     for kw, pts in [("supermarket",25),("food store",25),("retail park",20),
                     ("out of centre",20),("out-of-centre",20),
                     ("major",10),("district centre",10)]:
         if kw in d: p += pts
 
-    # Trigger words confirm retail policy engagement
     if "sequential test"   in tw: p += 15
     if "retail impact"     in tw: p += 15
     if "impact assessment" in tw: p += 10
     if "main town centre"  in tw: p += 5
     if "primary shopping"  in tw: p += 5
 
-    # High score = more complex = more likely to need study
     p += (score - 50) // 5
+    return min(p, 98)
 
-    return min(p, 98)  # never show 100% — leaves room for nuance
+
+def _appeal_urgency(desc, triggers, score):
+    """
+    Appeal urgency score for rural/full-service clients (0-100).
+    Enforcement notice (28 days) -> highest urgency.
+    Prior approval Class Q/R (1 month) -> very urgent.
+    Full application (6 months) -> standard.
+    """
+    d  = desc.lower()
+    tw = " ".join(triggers).lower() if triggers else ""
+    u  = 30
+
+    if any(w in d for w in ("enforcement notice","breach of condition",
+                             "enforcement action","breach of planning control",
+                             "unauthorised development")):
+        u += 45
+    elif any(w in d for w in ("class q","class r","prior approval",
+                               "class ma","permitted development")):
+        u += 35
+
+    for w in ("lack of evidence","failure to demonstrate","not been provided",
+               "insufficient information","in the absence of","not justified"):
+        if w in tw:
+            u += 20
+            break
+
+    for w in ("national park","northumberland national park",
+               "aonb","area of outstanding natural beauty"):
+        if w in tw or w in d:
+            u += 15
+            break
+
+    if any(w in tw or w in d for w in ("paragraph 84","para 84",
+                                        "exceptional quality","paragraph 80")):
+        u += 12
+
+    u += max(0, (score - 58) // 2)
+    return min(u, 98)
 
 _CH_CACHE = {}  # avoid re-querying same company name
 
@@ -2319,7 +2616,7 @@ def process_app(sess, base_url, council, item):
 
     log(f"  🏆 QUALIFIED — Triggers: {triggers}")
     desc = det.get("proposal", item["desc"])
-    sc   = score_lead(desc, triggers)
+    sc   = score_lead(desc, triggers, client_type=CLIENT_TYPE)
     log(f"  Score: {sc}/100")
 
     # ── Minimum score gate ────────────────────────────────────────────────
