@@ -99,4 +99,11 @@
     "sequential_test_fail": 40,
     "heritage_bonus": 20
   }
+  "doc_scores": {
+    "officer report": 120,
+    "delegated report": 120,
+    "planning report": 120,
+    "decision notice": 100,
+    "refusal notice": 100
+  }
 }
