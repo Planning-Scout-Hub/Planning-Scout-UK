@@ -72,7 +72,7 @@ COUNCILS = {
     "Bury":              "https://planning.bury.gov.uk/online-applications",
     "Rochdale":          "https://planning.rochdale.gov.uk/online-applications",
     "Wigan":             "https://planning.wigan.gov.uk/online-applications",
-    "Stockport":         "https://planning.stockport.gov.uk/online-applications",
+    "Stockport":         "https://planning.stockport.gov.uk/PlanningData-live/",
 
     # ══ South Yorkshire ═════════════════════════════════════════
     "Sheffield":         "https://planningapps.sheffield.gov.uk/online-applications",
