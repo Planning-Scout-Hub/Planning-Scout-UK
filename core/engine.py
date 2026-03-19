@@ -68,7 +68,7 @@ COUNCILS = {
     "Salford":           "https://publicaccess.salford.gov.uk/online-applications",
     "Trafford":          "https://pa.trafford.gov.uk/online-applications",
     "Bolton":            "https://www.planningpa.bolton.gov.uk/online-applications-17",
-    "Oldham":            "https://online.oldham.gov.uk/online-applications",
+    "Oldham":            "https://planningpa.oldham.gov.uk/online-applications/",
     "Bury":              "https://planning.bury.gov.uk/online-applications",
     "Rochdale":          "https://planning.rochdale.gov.uk/online-applications",
     "Wigan":             "https://planning.wigan.gov.uk/online-applications",
