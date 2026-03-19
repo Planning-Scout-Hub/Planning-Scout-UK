@@ -214,10 +214,10 @@ COUNCILS = {
     "St Albans":         "https://planningregister.stalbans.gov.uk/online-applications",
     "Watford":           "https://pa.watford.gov.uk/publicaccess/",
     "Hertsmere":         "https://www6.hertsmere.gov.uk/online-applications",
-    "Three Rivers":      "https://www.threerivers.gov.uk/online-applications",
-    "East Herts":        "https://www.eastherts.gov.uk/online-applications",
+    "Three Rivers":      "https://www3.threerivers.gov.uk/online-applications/",
+    "East Herts":        "https://publicaccess.eastherts.gov.uk/online-applications/",
     "Stevenage":         "https://publicaccess.stevenage.gov.uk/online-applications",
-    "North Herts":       "https://www.north-herts.gov.uk/online-applications",
+    "North Herts":       "https://pa2.north-herts.gov.uk/online-applications/",
     "Huntingdonshire":   "https://publicaccess.huntingdonshire.gov.uk/online-applications",
 
     # ══ North East ══════════════════════════════════════════════
