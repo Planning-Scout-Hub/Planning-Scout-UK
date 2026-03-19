@@ -1909,9 +1909,9 @@ def _resolve_viewdoc(sess, url, base_url, soup_of_doc_tab=None):
 
         return url, r
 
-    except Exception as e:
+except Exception as e:
         log(f"  ⚠️  viewDoc error: {e}", 2)
-        return url, None
+    return url, None
 
 
 def find_decision_doc(sess, base_url, key_val):
