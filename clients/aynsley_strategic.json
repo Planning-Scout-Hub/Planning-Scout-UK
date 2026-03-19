@@ -1,0 +1,18 @@
+{
+  "name": "Aynsley_Strategic_Rural",
+  "target_keywords": [
+    "Agricultural", "Barn conversion", "Holiday let", "Tourism", 
+    "National Park", "Green Belt", "Class Q", "Class R", "Shed", 
+    "Stable", "Rural exception", "AONB", "Coastal"
+  ],
+  "exclusion_keywords": [
+    "Discharge of condition", "Non-material amendment", "Tree works"
+  ],
+  "min_units": 1,
+  "scoring_logic": {
+    "refusal_bonus": 50,
+    "national_park_bonus": 30,
+    "sequential_test_fail": 40,
+    "heritage_bonus": 20
+  }
+}
