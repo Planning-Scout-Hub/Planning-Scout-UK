@@ -1810,6 +1810,15 @@ def get_details(sess, base_url, key_val):
 
 # Document type priority scores (higher = better)
 # Updated default scores
+def _score_text(text, custom_scores=None):
+    # Use JSON scores if provided, else use the default _DOC_SCORES
+    scores = custom_scores if custom_scores else _DOC_SCORES
+    t = text.lower().strip()
+    for phrase, s in sorted(scores.items(), key=lambda x: -x[1]):
+        if phrase in t:
+            return s
+    return 0
+
 _DOC_SCORES = {
     "decision notice": 100, "refusal notice":  100,
     "decision letter": 100, "refusal letter":  100,
@@ -1827,7 +1836,20 @@ _REFUSAL_PHRASES = [
     "recommendation: refuse", "recommended for refusal", "refusal be granted"
 ]
 
-def find_decision_doc(sess, base_url, key_val, custom_scores=None): 
+def _score_text(text, custom_scores=None):
+    # Use JSON scores if provided, else use the default _DOC_SCORES (ensure _DOC_SCORES is defined above)
+    try:
+        scores = custom_scores if custom_scores else _DOC_SCORES
+    except NameError:
+        scores = {"decision notice": 100, "refusal notice": 100, "officer report": 30} # Fallback
+        
+    t = text.lower().strip()
+    for phrase, s in sorted(scores.items(), key=lambda x: -x[1]):
+        if phrase in t:
+            return s
+    return 0
+
+def find_decision_doc(sess, base_url, key_val, custom_scores=None):
     """
     Fetch the Documents tab and find the best decision notice.
     """
@@ -2006,7 +2028,15 @@ def _resolve_viewdoc(sess, url, base_url, soup_of_doc_tab=None):
         log(f"  ⚠️  viewDoc error: {e}", 2)
         return url, None
 
-
+def _score_text(text, custom_scores=None):
+    # Use JSON scores if provided, else use the default _DOC_SCORES
+    scores = custom_scores if custom_scores else _DOC_SCORES
+    t = text.lower().strip()
+    for phrase, s in sorted(scores.items(), key=lambda x: -x[1]):
+        if phrase in t:
+            return s
+    return 0
+    
 def find_decision_doc(sess, base_url, key_val, custom_scores=None): # Add custom_scores here
     """
     Fetch the Documents tab and find the best decision notice.
@@ -2046,7 +2076,7 @@ def find_decision_doc(sess, base_url, key_val, custom_scores=None): # Add custom
                 continue
             # All text in this row
             row_text = " ".join(td.get_text(strip=True) for td in tds)
-            score = _score_text(row_text)
+            score = _score_text(row_text, custom_scores)
             if score == 0:
                 continue
             # Find a link in this row
@@ -2058,7 +2088,7 @@ def find_decision_doc(sess, base_url, key_val, custom_scores=None): # Add custom
     # Strategy 2: <li> items (newer Idox accordion / list layout)
     for li in soup.find_all("li"):
         li_text = li.get_text(separator=" ", strip=True)
-        score = _score_text(li_text)
+        score = _score_text(li_text, custom_scores)
         if score == 0:
             continue
         for a in li.find_all("a", href=True):
@@ -2068,7 +2098,7 @@ def find_decision_doc(sess, base_url, key_val, custom_scores=None): # Add custom
     for a in soup.find_all("a", href=True):
         link_text = a.get_text(strip=True)
         parent_text = a.parent.get_text(separator=" ", strip=True) if a.parent else ""
-        score = max(_score_text(link_text), _score_text(parent_text))
+        score = max(_score_text(link_text, custom_scores), _score_text(parent_text, custom_scores))
         if score >= 25:  # only meaningful scores
             _add(a["href"], link_text[:50], score)
 
@@ -2263,7 +2293,8 @@ def process_app(sess, base_url, council, item):
     if decision_raw and any(w in decision_raw for w in ("refus", "refuse")):
         log(f"  ✅ Portal confirms refusal: '{det.get('decision','')}'", 2)
 
-    doc_url, prefetched  = find_decision_doc(sess, base_url, kv)
+    custom_scores = CLIENT_CONFIG.get("doc_scores") if "CLIENT_CONFIG" in globals() else None
+        doc_url, prefetched = find_decision_doc(sess, base_url, kv, custom_scores=custom_scores)
     if not doc_url:
         log(f"  ⚠️  No decision doc — skip")
         return None
