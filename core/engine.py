@@ -147,7 +147,7 @@ COUNCILS = {
     "Gloucester":        "https://publicaccess.gloucester.gov.uk/online-applications",
     "Swindon":           "https://pa.swindon.gov.uk/publicaccess/",
     "Torbay":            "https://publicaccess.torbay.gov.uk/view/",
-    "Bath":              "https://www.bathnes.gov.uk/online-applications",
+    "Bath":              "https://app.bathnes.gov.uk/webforms/planning/search.html",
 
     # ══ South East ══════════════════════════════════════════════
     "Portsmouth":        "https://publicaccess.portsmouth.gov.uk/online-applications",
@@ -155,11 +155,11 @@ COUNCILS = {
     "Reading":           "https://planning.reading.gov.uk/online-applications",
     "Oxford":            "https://public.oxford.gov.uk/online-applications",
     "Canterbury":        "https://pa.canterbury.gov.uk/online-applications",
-    "Maidstone":         "https://pa.maidstone.gov.uk/online-applications",
+    "Maidstone":         "https://pa.midkent.gov.uk/online-applications/",
     "Thanet":            "https://planning.thanet.gov.uk/online-applications",
     "Guildford":         "https://publicaccess.guildford.gov.uk/online-applications",
     "Eastbourne":        "https://planning.eastbourne.gov.uk/online-applications",
-    "Worthing":          "https://planning.worthing.gov.uk/online-applications",
+    "Worthing":          "https://planning.adur-worthing.gov.uk/online-applications/",
     "Brighton":          "https://planningapps.brighton-hove.gov.uk/online-applications",
     "Hastings":          "https://www.hastings.gov.uk/online-applications",
     "Chichester":        "https://publicaccess.chichester.gov.uk/online-applications",
