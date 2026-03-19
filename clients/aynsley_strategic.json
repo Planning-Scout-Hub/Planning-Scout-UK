@@ -26,5 +26,12 @@
     "discharge of condition", "non-material amendment", "tree preservation",
     "tpo", "advertisement consent", "screening opinion", "scoping opinion",
     "minor material amendment", "s73", "section 73", "telecommunications"
-  ]
+  ],
+  "min_units": 1,
+  "scoring_logic": {
+    "refusal_bonus": 50,
+    "national_park_bonus": 30,
+    "sequential_test_fail": 40,
+    "heritage_bonus": 20
+  }
 }
