@@ -23,9 +23,9 @@ jobs:
       - name: Run Master Scraper
         env:
           GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
-        run: python engine.py --client master.json --weeks 1
+        run: python core/engine.py --client master.json --weeks 1
 
       - name: Run Distributor
         env:
           GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
-        run: python distribute_leads.py
+        run: python core/distribute_leads.py
