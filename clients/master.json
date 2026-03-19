@@ -1,9 +1,0 @@
-{
-  "client_id": "master",
-  "client_name": "PlanningScout Master DB",
-  "sheet_id": "1bUWsdTT2sLoqYPdBqZrD-7xR60bBq03J2QkjPK6T6gw",
-  "email_to_secret_name": "GMAIL_TO_ADMIN",
-  "min_lead_score": 0,
-  "search_keywords": ["residential", "dwelling", "retail", "class e", "barn", "agricultural", "commercial", "change of use"],
-  "pdf_triggers": ["refuse", "sequential", "policy", "paragraph", "evidence", "harm", "character"]
-}
