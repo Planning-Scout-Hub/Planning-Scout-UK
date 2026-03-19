@@ -1,6 +1,7 @@
 {
   "client_id": "aynsley_planning",
   "client_name": "Aynsley Planning Strategic",
+  "target_councils": ["Northumberland", "Durham", "North Tyneside", "Newcastle", "Gateshead", "Sunderland"],
   "sheet_id": "1x7HePZRM5OUEhbxFbPxKpza7yUFqGLa1ZZii8TEI-pI",
   "email_to_secret_name": "GMAIL_TO_AYNSLEY",
   "min_lead_score": 55,
