@@ -2294,7 +2294,7 @@ def process_app(sess, base_url, council, item):
         log(f"  ✅ Portal confirms refusal: '{det.get('decision','')}'", 2)
 
     custom_scores = CLIENT_CONFIG.get("doc_scores") if "CLIENT_CONFIG" in globals() else None
-        doc_url, prefetched = find_decision_doc(sess, base_url, kv, custom_scores=custom_scores)
+    doc_url, prefetched = find_decision_doc(sess, base_url, kv, custom_scores=custom_scores)
     if not doc_url:
         log(f"  ⚠️  No decision doc — skip")
         return None
