@@ -1,4 +1,4 @@
-name: MAPlanning — Weekly Scraper
+name: Aynsley - Scraper
 
 # ── WHEN IT RUNS ─────────────────────────────────────────────
 on:
@@ -40,7 +40,7 @@ jobs:
       # 4. Run the scraper
       #    - For scheduled runs: uses default 2 weeks
       #    - For manual runs: uses the 'weeks' input you typed
-      - name: Run MAPlanning scraper
+      - name: Run Aynsley - Scraper
         env:
           # Google Sheets auth
           GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
@@ -52,4 +52,4 @@ jobs:
           GMAIL_TO_MAPLANNING: ${{ secrets.GMAIL_TO_MAPLANNING }}
         run: |
           WEEKS=${{ github.event.inputs.weeks || '2' }}
-          python core/engine.py --client clients/maplanning.json --weeks $WEEKS
+          python core/engine.py --client clients/aynsley_strategic.json --weeks $WEEKS
