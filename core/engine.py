@@ -127,7 +127,7 @@ COUNCILS = {
     "West Northants":    "https://www.westnorthants.gov.uk/online-applications",
     "North Northants":   "https://www.northnorthants.gov.uk/online-applications",
     "Leicester":         "https://planning.leicester.gov.uk/online-applications",
-    "Chesterfield":      "https://planning.chesterfield.gov.uk/online-applications",
+    "Chesterfield":      "https://publicaccess.chesterfield.gov.uk/online-applications/",
     "Peterborough":      "https://planning.peterborough.gov.uk/online-applications",
 
     # ══ West Midlands ═══════════════════════════════════════════
