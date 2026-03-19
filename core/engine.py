@@ -13,27 +13,39 @@ import os, json
 import argparse
 
 # ════════════════════════════════════════════════════════════
-# LOAD CLIENT DNA (JSON)
+# LOAD ENGINE MODE (MASTER OR CLIENT)
 # ════════════════════════════════════════════════════════════
 parser = argparse.ArgumentParser(description="Run PlanningScout Engine")
 parser.add_argument("--client", required=True, help="Path to client JSON")
-parser.add_argument("--weeks", type=int, default=2, help="Weeks to scrape") # Added this
+parser.add_argument("--weeks", type=int, default=1, help="Weeks to scrape") 
 args = parser.parse_args()
 
 with open(args.client, "r", encoding="utf-8") as f:
     CLIENT_CONFIG = json.load(f)
 
-# The engine now gets all its rules from the JSON file
+# 1. THE SWITCH: If client_id is 'master', we use 'Aggressive' broad keywords
+IS_MASTER_RUN = (CLIENT_CONFIG.get("client_id") == "master")
+
+# 2. ASSIGN CORE VARIABLES
 SHEET_ID        = CLIENT_CONFIG["sheet_id"]
-WEEKS_TO_SCRAPE = args.weeks  # This now listens to GitHub Actions
-RETAIL_KEYWORDS = CLIENT_CONFIG["search_keywords"]
-PDF_TRIGGERS    = CLIENT_CONFIG["pdf_triggers"]
-EXCLUDE_WORDS   = CLIENT_CONFIG["exclude_words"]
-MIN_LEAD_SCORE  = CLIENT_CONFIG["min_lead_score"]
-CLIENT_EMAIL_VAR= CLIENT_CONFIG["email_to_secret_name"]
+WEEKS_TO_SCRAPE = args.weeks  
+MIN_LEAD_SCORE  = CLIENT_CONFIG.get("min_lead_score", 0) # Master usually wants 0 to catch all
+CLIENT_EMAIL_VAR= CLIENT_CONFIG.get("email_to_secret_name", "GMAIL_TO_ADMIN")
+
+# 3. LOGIC: If Master, we combine ALL triggers to catch every possible lead
+if IS_MASTER_RUN:
+    # Master uses a massive broad list to ensure nothing is missed
+    RETAIL_KEYWORDS = ["residential", "dwelling", "class e", "retail", "barn", "agricultural", "conversion", "house"]
+    PDF_TRIGGERS    = ["refuse", "reject", "sequential", "paragraph", "nppf", "policy", "harm"]
+    EXCLUDE_WORDS   = ["tree preservation", "tpo", "screening opinion"] # Minimal exclusions
+else:
+    # Client mode uses the specific rules from their JSON
+    RETAIL_KEYWORDS = CLIENT_CONFIG["search_keywords"]
+    PDF_TRIGGERS    = CLIENT_CONFIG["pdf_triggers"]
+    EXCLUDE_WORDS   = CLIENT_CONFIG["exclude_words"]
+
 import email_digest
 import pdfplumber
-
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ════════════════════════════════════════════════════════════
