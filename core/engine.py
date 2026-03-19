@@ -316,6 +316,8 @@ HEADERS_HTTP = {
     "Sec-Fetch-Mode": "navigate",
     "Sec-Fetch-Site": "same-origin",
     "DNT": "1",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
 }
 
 # ── Per-council rate limit tracker ───────────────────────────────────────────
@@ -1901,9 +1903,9 @@ def _resolve_viewdoc(sess, url, base_url, soup_of_doc_tab=None):
 
         # No permanent URL found — we still have the PDF bytes from this session
         ct = r.headers.get("Content-Type", "").lower()
-        if "html" in ct:
-            log("  ⚠️ URL returned HTML instead of PDF", 2)
-            return url, None
+        if "pdf" in ct or r.content[:4] == b"%PDF":
+            log(f"  ⚠️  Session-only URL (bytes available for scan, link may expire)", 2)
+            return url, r
 
         return url, r
 
@@ -2017,26 +2019,65 @@ def find_decision_doc(sess, base_url, key_val):
 # ════════════════════════════════════════════════════════════
 # PDF SCANNER  —  accepts pre-fetched response to avoid double download
 # ════════════════════════════════════════════════════════════
+# Words that MUST appear in the PDF for it to count as a refusal.
+# An approved application's officer report can contain trigger topic words
+# ("sequential test", "nppf") while still recommending approval.
+# We require at least one explicit refusal phrase in the document.
 _REFUSAL_PHRASES = [
-    "is refused", "be refused", "hereby refused", "refusal of",
-    "reasons for refusal", "reason for refusal",
-    "refuse planning permission", "refused planning permission",
-    "application is refused", "permission is refused", "appeal is dismissed"
+    "is refused",
+    "be refused",
+    "hereby refused",
+    "refusal of",
+    "reasons for refusal",
+    "reason for refusal",
+    "refuse planning permission",
+    "refused planning permission",
+    "application is refused",
+    "permission is refused",
+    "appeal is dismissed",       # appeal decision = original refusal confirmed
 ]
 
-def calculate_advanced_logic(text, config):
-    logic_requirements = config.get("logic_requirements", {})
-    hits = []
-    for category, phrases in logic_requirements.items():
-        if any(phrase.lower() in text.lower() for phrase in phrases):
-            hits.append(category)
-    return hits
+def scan_pdf(sess, pdf_url, prefetched_response=None):
+    """
+    Download and scan a PDF for:
+      1. Retail/Housing planning trigger words (topic relevance)
+      2. Explicit refusal language (REQUIRED — prevents approved apps slipping through)
 
-def scan_pdf(sess, doc_url, prefetched_response=None):
+    Returns (trigger_words, is_refused):
+      trigger_words  — list of matched PDF_TRIGGERS
+      is_refused     — True only if PDF contains explicit refusal language
+    Both must be non-empty/True for a lead to qualify.
+    """
+    log(f"  📥 …{pdf_url[-65:]}", 2)
     try:
-        r = prefetched_response if prefetched_response else sess.get(doc_url, timeout=30, verify=False)
-        size = len(r.content) if r and r.content else 0
+        if prefetched_response is not None:
+            r = prefetched_response
+            log(f"  (using prefetched response)", 2)
+        else:
+            r = sess.get(
+                pdf_url,
+                headers={"Accept": "application/pdf,*/*", "Referer": pdf_url},
+                timeout=50, allow_redirects=True,
+            )
 
+        ct   = r.headers.get("Content-Type", "").lower()
+        size = len(r.content)
+        log(f"  HTTP {r.status_code} | {size:,}b | {ct[:35]}", 2)
+
+        if r.status_code != 200:
+            return [], False
+
+        # Got HTML back = session error / "Document Unavailable"
+        if "html" in ct:
+            snippet = r.text[:300].replace("\n", " ")
+            log(f"  ⚠️  Got HTML (session issue or wrong URL): {snippet[:120]}", 2)
+            return [], False
+
+        if size < 800:
+            log(f"  ⚠️  Too small to be real PDF ({size}b)", 2)
+            return [], False
+
+        # Confirm it's a PDF (magic bytes)
         if not r.content[:4] == b"%PDF":
             if size > 5000:
                 log(f"  ⚠️  No PDF magic bytes but large — trying anyway", 2)
@@ -2056,29 +2097,41 @@ def scan_pdf(sess, doc_url, prefetched_response=None):
             log(f"  ⚠️  No extractable text — scanned image PDF?", 2)
             return [], False
 
+        log(f"  {len(text):,} chars extracted", 2)
+
+        # ── Check 1: is this actually a refusal? ─────────────────────
         is_refused = any(phrase in text for phrase in _REFUSAL_PHRASES)
         if is_refused:
             log(f"  ✅ Refusal confirmed in PDF text", 2)
         else:
             log(f"  ⚠️  No refusal language found — likely approved/other decision", 2)
 
+        # ── Check 2: Proximity-based Trigger Words ──────────────
         found = []
+        # Anchor words that indicate the actual decision context
         anchors = ["refuse", "refused", "refusal", "dismiss", "dismissed", "unacceptable", "harm"]
         
         for w in PDF_TRIGGERS:
             if w in text:
+                # Find where the trigger word is in the document
                 trigger_idx = text.find(w)
+                
+                # Create a window of ~800 chars (~100 words) around the trigger
                 window_start = max(0, trigger_idx - 800)
                 window_end = min(len(text), trigger_idx + len(w) + 800)
                 window_text = text[window_start:window_end]
                 
+                # Only count the trigger if an anchor word is nearby
                 if any(anchor in window_text for anchor in anchors):
                     found.append(w)
                     log(f"  🎯 '{w}' (validated by proximity)", 2)
+                else:
+                    log(f"  ⚠️ '{w}' found, but too far from refusal context — ignoring", 2)
 
         if not found:
             log(f"  ❌ No validated triggers within proximity of refusal language", 2)
 
+        # Final output for this application
         return found, is_refused
 
     except Exception as e:
