@@ -316,8 +316,6 @@ HEADERS_HTTP = {
     "Sec-Fetch-Mode": "navigate",
     "Sec-Fetch-Site": "same-origin",
     "DNT": "1",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
 }
 
 # ── Per-council rate limit tracker ───────────────────────────────────────────
@@ -1903,15 +1901,15 @@ def _resolve_viewdoc(sess, url, base_url, soup_of_doc_tab=None):
 
         # No permanent URL found — we still have the PDF bytes from this session
         ct = r.headers.get("Content-Type", "").lower()
-    if "html" in ct:
+        if "html" in ct:
             log("  ⚠️ URL returned HTML instead of PDF", 2)
             return url, None
 
         return url, r
 
-except Exception as e:
+    except Exception as e:
         log(f"  ⚠️  viewDoc error: {e}", 2)
-    return url, None
+        return url, None
 
 
 def find_decision_doc(sess, base_url, key_val):
@@ -2078,52 +2076,9 @@ def scan_pdf(sess, doc_url, prefetched_response=None):
                     found.append(w)
                     log(f"  🎯 '{w}' (validated by proximity)", 2)
 
-        logic_hits = calculate_advanced_logic(text, CLIENT_CONFIG)
-        
         if not found:
             log(f"  ❌ No validated triggers within proximity of refusal language", 2)
 
-        return found, is_refused
-
-    except Exception as e:
-        log(f"  ⚠️  Critical error scanning PDF: {e}", 2)
-        return [], False
-
-        log(f"  {len(text):,} chars extracted", 2)
-
-        # ── Check 1: is this actually a refusal? ─────────────────────
-        is_refused = any(phrase in text for phrase in _REFUSAL_PHRASES)
-        if is_refused:
-            log(f"  ✅ Refusal confirmed in PDF text", 2)
-        else:
-            log(f"  ⚠️  No refusal language found — likely approved/other decision", 2)
-
-        # ── Check 2: Proximity-based Trigger Words ──────────────
-        found = []
-        # Anchor words that indicate the actual decision context
-        anchors = ["refuse", "refused", "refusal", "dismiss", "dismissed", "unacceptable", "harm"]
-        
-        for w in PDF_TRIGGERS:
-            if w in text:
-                # Find where the trigger word is in the document
-                trigger_idx = text.find(w)
-                
-                # Create a window of ~800 chars (~100 words) around the trigger
-                window_start = max(0, trigger_idx - 800)
-                window_end = min(len(text), trigger_idx + len(w) + 800)
-                window_text = text[window_start:window_end]
-                
-                # Only count the trigger if an anchor word is nearby
-                if any(anchor in window_text for anchor in anchors):
-                    found.append(w)
-                    log(f"  🎯 '{w}' (validated by proximity)", 2)
-                else:
-                    log(f"  ⚠️ '{w}' found, but too far from refusal context — ignoring", 2)
-
-        if not found:
-            log(f"  ❌ No validated triggers within proximity of refusal language", 2)
-
-        # Final output for this application
         return found, is_refused
 
     except Exception as e:
