@@ -81,7 +81,7 @@ COUNCILS = {
     # Rotherham: Fastweb portal — not Idox, excluded
 
     # ══ North/East Yorkshire ════════════════════════════════════
-    "York":              "https://publicaccess.york.gov.uk/online-applications",
+    "York":              "https://planningaccess.york.gov.uk/online-applications/",
     "East Riding":       "https://www.eastriding.gov.uk/online-applications",
     "Hull":              "https://www.hull.gov.uk/online-applications",
     "North Yorkshire":   "https://planning.northyorks.gov.uk/online-applications",
