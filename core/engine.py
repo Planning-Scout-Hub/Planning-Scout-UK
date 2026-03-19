@@ -1905,7 +1905,7 @@ def _resolve_viewdoc(sess, url, base_url, soup_of_doc_tab=None):
         ct = r.headers.get("Content-Type", "").lower()
         if "html" in ct:
             log("  ⚠️ URL returned HTML instead of PDF", 2)
-            return [], is_refused
+            return url, None
 
         return url, r
 
@@ -2019,46 +2019,26 @@ def find_decision_doc(sess, base_url, key_val):
 # ════════════════════════════════════════════════════════════
 # PDF SCANNER  —  accepts pre-fetched response to avoid double download
 # ════════════════════════════════════════════════════════════
-# Words that MUST appear in the PDF for it to count as a refusal.
-# An approved application's officer report can contain trigger topic words
-# ("sequential test", "nppf") while still recommending approval.
-# We require at least one explicit refusal phrase in the document.
 _REFUSAL_PHRASES = [
-    "is refused",
-    "be refused",
-    "hereby refused",
-    "refusal of",
-    "reasons for refusal",
-    "reason for refusal",
-    "refuse planning permission",
-    "refused planning permission",
-    "application is refused",
-    "permission is refused",
-    "appeal is dismissed",       # appeal decision = original refusal confirmed
+    "is refused", "be refused", "hereby refused", "refusal of",
+    "reasons for refusal", "reason for refusal",
+    "refuse planning permission", "refused planning permission",
+    "application is refused", "permission is refused", "appeal is dismissed"
 ]
 
-# Inside engine.py - The Universal Scorer
 def calculate_advanced_logic(text, config):
-    """
-    The Universal Brain: Checks ANY logic requirement defined in the JSON.
-    """
     logic_requirements = config.get("logic_requirements", {})
     hits = []
-    
     for category, phrases in logic_requirements.items():
         if any(phrase.lower() in text.lower() for phrase in phrases):
             hits.append(category)
-            
     return hits
 
-# Inside your main loop where you process the PDF:
-logic_hits = calculate_advanced_logic(pdf_text, CLIENT_CONFIG)
+def scan_pdf(sess, doc_url, prefetched_response=None):
+    try:
+        r = prefetched_response if prefetched_response else sess.get(doc_url, timeout=30, verify=False)
+        size = len(r.content) if r and r.content else 0
 
-# If the JSON has 'must_have_all': true, we filter strictly.
-# Otherwise, we just add the hits to the spreadsheet.
-lead_score = len(logic_hits) * 20
-
-        # Confirm it's a PDF (magic bytes)
         if not r.content[:4] == b"%PDF":
             if size > 5000:
                 log(f"  ⚠️  No PDF magic bytes but large — trying anyway", 2)
@@ -2077,6 +2057,37 @@ lead_score = len(logic_hits) * 20
         if not text.strip():
             log(f"  ⚠️  No extractable text — scanned image PDF?", 2)
             return [], False
+
+        is_refused = any(phrase in text for phrase in _REFUSAL_PHRASES)
+        if is_refused:
+            log(f"  ✅ Refusal confirmed in PDF text", 2)
+        else:
+            log(f"  ⚠️  No refusal language found — likely approved/other decision", 2)
+
+        found = []
+        anchors = ["refuse", "refused", "refusal", "dismiss", "dismissed", "unacceptable", "harm"]
+        
+        for w in PDF_TRIGGERS:
+            if w in text:
+                trigger_idx = text.find(w)
+                window_start = max(0, trigger_idx - 800)
+                window_end = min(len(text), trigger_idx + len(w) + 800)
+                window_text = text[window_start:window_end]
+                
+                if any(anchor in window_text for anchor in anchors):
+                    found.append(w)
+                    log(f"  🎯 '{w}' (validated by proximity)", 2)
+
+        logic_hits = calculate_advanced_logic(text, CLIENT_CONFIG)
+        
+        if not found:
+            log(f"  ❌ No validated triggers within proximity of refusal language", 2)
+
+        return found, is_refused
+
+    except Exception as e:
+        log(f"  ⚠️  Critical error scanning PDF: {e}", 2)
+        return [], False
 
         log(f"  {len(text):,} chars extracted", 2)
 
