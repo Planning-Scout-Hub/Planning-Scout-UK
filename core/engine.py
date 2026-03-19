@@ -1823,8 +1823,8 @@ _DOC_SCORES = {
     "decision notice": 100, "refusal notice":  100,
     "decision letter": 100, "refusal letter":  100,
     "refusal":          95, "decision":         90,
-    "appeal decision":  80, "officer report":   30,
-    "committee report": 25, "planning statement": 5,
+    "appeal decision":  80, "officer report":   40,
+    "committee report": 25, "planning statement": 60,
 }
 
 # Updated refusal phrases (found around Line 333)
