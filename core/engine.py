@@ -1817,13 +1817,93 @@ _DOC_SCORES = {
     "committee report": 25, "planning statement": 5,
 }
 
-def _score_text(text):
-    t = text.lower().strip()
-    for phrase, s in sorted(_DOC_SCORES.items(), key=lambda x: -x[1]):
-        if phrase in t:
-            return s
-    return 0
+def find_decision_doc(sess, base_url, key_val, custom_scores=None): 
+    """
+    Fetch the Documents tab and find the best decision notice.
+    """
+    log(f"  📂 Documents tab…", 2)
+    from urllib.parse import urlparse
+    p    = urlparse(base_url)
+    root = f"{p.scheme}://{p.netloc}"
 
+    tab_url = f"{base_url}/applicationDetails.do?activeTab=documents&keyVal={key_val}"
+    r = sess.get(tab_url, timeout=25, allow_redirects=True, verify=False)
+    if not r or r.status_code != 200:
+        log(f"  ❌ Documents tab HTTP {getattr(r,'status_code','?')}", 2)
+        return None, None
+
+    soup = BeautifulSoup(r.text, "html.parser")
+    candidates = []
+
+    def _add(href, label, score):
+        u = _abs_url(root, base_url, href)
+        if u:
+            candidates.append({"score": score, "url": u, "label": label})
+
+    # ── Strategy 1: Table Rows ────────────────────────────────────
+    doc_tables = soup.find_all("table")
+    for tbl in doc_tables:
+        for row in tbl.find_all("tr"):
+            tds = row.find_all("td")
+            if len(tds) < 2: continue
+            row_text = " ".join(td.get_text(strip=True) for td in tds)
+            
+            # CHANGE HERE: Pass custom_scores
+            score = _score_text(row_text, custom_scores) 
+            
+            if score == 0: continue
+            for td in reversed(tds):
+                for a in td.find_all("a", href=True):
+                    _add(a["href"], row_text[:50], score)
+                    break
+
+    # ── Strategy 2: List Items ────────────────────────────────────
+    for li in soup.find_all("li"):
+        li_text = li.get_text(separator=" ", strip=True)
+        
+        # CHANGE HERE: Pass custom_scores
+        score = _score_text(li_text, custom_scores)
+        
+        if score == 0: continue
+        for a in li.find_all("a", href=True):
+            _add(a["href"], li_text[:50], score)
+
+    # ── Strategy 3: Direct Links ──────────────────────────────────
+    for a in soup.find_all("a", href=True):
+        link_text = a.get_text(strip=True)
+        parent_text = a.parent.get_text(separator=" ", strip=True) if a.parent else ""
+        
+        # CHANGE HERE: Pass custom_scores to both text checks
+        score = max(_score_text(link_text, custom_scores), _score_text(parent_text, custom_scores))
+        
+        if score >= 25: 
+            _add(a["href"], link_text[:50], score)
+
+    # Strategy 4: stays the same (it handles raw /files/ links)
+    for a in soup.find_all("a", href=True):
+        h = a["href"]
+        if "/files/" in h and ".pdf" in h.lower():
+            fname = h.split("/")[-1].lower()
+            score = 90 if any(w in fname for w in ["dec", "refus", "notice"]) else 10
+            _add(h, f"files/{h.split('/')[-1][:40]}", score)
+
+    seen_urls = {}
+    for cand in candidates:
+        u = cand["url"]
+        if u not in seen_urls or cand["score"] > seen_urls[u]["score"]:
+            seen_urls[u] = cand
+
+    ranked = sorted(seen_urls.values(), key=lambda x: -x["score"])
+    if not ranked:
+        log(f"  ❌ No document links found", 2)
+        return None, None
+
+    best = ranked[0]
+    log(f"  → Best: score={best['score']} | {best['url'][-65:]}", 2)
+
+    resolved_url, prefetched = _resolve_viewdoc(sess, best["url"], base_url, soup_of_doc_tab=soup)
+    return resolved_url, prefetched
+    
 def _abs_url(root, base_url, href):
     if not href or href.startswith(("javascript:", "#", "mailto:")):
         return None
@@ -1917,7 +1997,7 @@ def _resolve_viewdoc(sess, url, base_url, soup_of_doc_tab=None):
         return url, None
 
 
-def find_decision_doc(sess, base_url, key_val):
+def find_decision_doc(sess, base_url, key_val, custom_scores=None): # Add custom_scores here
     """
     Fetch the Documents tab and find the best decision notice.
     Returns (store_url, content_response_or_None).
@@ -2027,17 +2107,23 @@ def find_decision_doc(sess, base_url, key_val):
 # ("sequential test", "nppf") while still recommending approval.
 # We require at least one explicit refusal phrase in the document.
 _REFUSAL_PHRASES = [
-    "is refused",
-    "be refused",
-    "hereby refused",
+    "is refused", 
+    "be refused", 
+    "hereby refused", 
     "refusal of",
-    "reasons for refusal",
-    "reason for refusal",
+    "reasons for refusal", 
+    "reason for refusal", 
     "refuse planning permission",
-    "refused planning permission",
+    "refused planning permission", 
     "application is refused",
-    "permission is refused",
-    "appeal is dismissed",       # appeal decision = original refusal confirmed
+    "permission is refused", 
+    "appeal is dismissed",
+    # Added for Officer Reports
+    "recommendation: refuse", 
+    "recommended for refusal", 
+    "refusal be granted",
+    "officer recommendation: refusal", 
+    "concluded that planning permission be refused"       # appeal decision = original refusal confirmed
 ]
 
 def scan_pdf(sess, pdf_url, prefetched_response=None):
