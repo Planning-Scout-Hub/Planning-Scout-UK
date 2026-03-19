@@ -145,8 +145,8 @@ COUNCILS = {
     "Cornwall":          "https://planning.cornwall.gov.uk/online-applications",
     "Cheltenham":        "https://publicaccess.cheltenham.gov.uk/online-applications",
     "Gloucester":        "https://publicaccess.gloucester.gov.uk/online-applications",
-    "Swindon":           "https://pa.swindon.gov.uk/online-applications",
-    "Torbay":            "https://www.torbay.gov.uk/online-applications",
+    "Swindon":           "https://pa.swindon.gov.uk/publicaccess/",
+    "Torbay":            "https://publicaccess.torbay.gov.uk/view/",
     "Bath":              "https://www.bathnes.gov.uk/online-applications",
 
     # ══ South East ══════════════════════════════════════════════
