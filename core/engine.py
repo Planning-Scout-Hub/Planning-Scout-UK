@@ -91,12 +91,15 @@ COUNCILS = {
     "Durham":            "https://publicaccess.durham.gov.uk/online-applications",
     "North Tyneside":    "https://idoxpublicaccess.northtyneside.gov.uk/online-applications",
     "South Tyneside":    "https://www.southtyneside.gov.uk/online-applications",
-    "Northumberland":    "https://www.northumberland.gov.uk/online-applications",
+    "Northumberland":    "https://publicaccess.northumberland.gov.uk/online-applications/",
     "Middlesbrough":     "https://planning.middlesbrough.gov.uk/online-applications",
     "Darlington":        "https://planning.darlington.gov.uk/online-applications",
     "Stockton":          "https://www.stockton.gov.uk/online-applications",
     "Hartlepool":        "https://eha.hartlepool.gov.uk/online-applications",
     "Redcar":            "https://planning.redcar-cleveland.gov.uk/online-applications",
+    "Newcastle":         "https://publicaccess.newcastle.gov.uk/online-applications/"
+    "Gateshead":         "https://publicaccess.gateshead.gov.uk/online-applications/"
+    "Sunderland":        "https://www.sunderland.gov.uk/online-applications/"
 
     # ══ North West ══════════════════════════════════════════════
     "Knowsley":          "https://publicaccess.knowsley.gov.uk/online-applications",
