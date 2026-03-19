@@ -1055,6 +1055,22 @@ def enrich_lead(lead):
     #    (planning agent is almost always an architect or planning consultant)
     lead["architect"] = lead.get("agent","")
 
+    # 5. Calculate Appeal Window
+    lead["days_to_appeal"] = "Unknown"
+    if lead.get("date_dec"):
+        try:
+            # Idox dates are usually DD/MM/YYYY or DD-MMM-YYYY. Assume standard UK.
+            dec_date = datetime.strptime(lead["date_dec"].replace("-", "/"), "%d/%m/%Y")
+            appeal_deadline = dec_date + timedelta(days=182) # Approx 6 months
+            days_left = (appeal_deadline - datetime.now()).days
+            
+            if days_left > 0:
+                lead["days_to_appeal"] = f"{days_left} days left"
+            else:
+                lead["days_to_appeal"] = "Window Closed"
+        except Exception as e:
+            pass
+
     return lead
 
 
