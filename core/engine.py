@@ -300,8 +300,8 @@ COUNCILS = {
 
     # ══ East of England (additions) ══════════════════════════════════
     "Broadland":         "https://www.broadland.gov.uk/online-applications",
-    "Kings Lynn":        "https://www.west-norfolk.gov.uk/online-applications",
-    "Fenland":           "https://www.fenland.gov.uk/online-applications",
+    "Kings Lynn":        "https://online.west-norfolk.gov.uk/online-applications/",
+    "Fenland":           "https://www.publicaccess.fenland.gov.uk/publicaccess/",
 }
 
 HEADERS_HTTP = {
