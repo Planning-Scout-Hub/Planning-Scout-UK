@@ -2710,6 +2710,9 @@ def scrape_council(council, base_url, date_from, date_to):
 # ════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════
+# MAIN
+# ════════════════════════════════════════════════════════════
 def run():
     run_start = datetime.now()
 
@@ -2732,6 +2735,8 @@ def run():
         return
 
     today     = datetime.now()
+    date_to   = today.strftime("%d/%m/%Y")
+    date_from = (today - timedelta(weeks=WEEKS_TO_SCRAPE)).strftime("%d/%m/%Y")
 
     print("=" * 60)
     print(f"🏗️  MAPlanning Retail Lead Engine v20")
@@ -2747,17 +2752,17 @@ def run():
     load_existing_refs()
 
     # ── Step 2: pre-flight — fast parallel check ───────────
-live_councils, _dead = preflight_check(COUNCILS)
+    live_councils, _dead = preflight_check(COUNCILS)
     if not live_councils:
         print("❌ No reachable councils — check network"); return
 
     # ── Batch slicing — splits live councils for parallel GitHub Actions jobs ──
-    # Format: "2/4" = second batch of four. Default "1/1" = all councils (unchanged behaviour).
     _batch_num, _batch_total = (int(x) for x in args.batch.split("/"))
     _all_items   = list(live_councils.items())
     _chunk_size  = -(-len(_all_items) // _batch_total)   # ceiling division
     _batch_slice = _all_items[(_batch_num-1)*_chunk_size : _batch_num*_chunk_size]
     live_councils = dict(_batch_slice)
+    
     log(f"📦 Batch {_batch_num}/{_batch_total}: {len(live_councils)} councils assigned")
     if not live_councils:
         log("⚠️  No councils in this batch — exiting cleanly"); return
@@ -2792,13 +2797,13 @@ live_councils, _dead = preflight_check(COUNCILS)
     run_duration_min = (datetime.now() - run_start).total_seconds() / 60
 
     # ── Step 4: count leads added in the past 7 days from the sheet ────────
-    # This runs AFTER scraping so newly-written leads are included in the count.
     weekly_count, weekly_leads = get_weekly_lead_count()
 
     # ── Final report ─────────────────────────────────────────
     print(f"\n{'='*60}")
     print(f"📊 FINAL RESULTS")
     print(f"{'='*60}")
+    # ... (rest of your print statements)
 
     print(f"\n  Run duration: {run_duration_min:.1f} minutes")
     print(f"  Councils attempted:  {total}")
