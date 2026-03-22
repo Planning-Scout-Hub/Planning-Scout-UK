@@ -2710,7 +2710,7 @@ def scrape_council(council, base_url, date_from, date_to):
 # MAIN
 # ════════════════════════════════════════════════════════════
 def run():
-        run_start = datetime.now()
+    run_start = datetime.now()
 
     # ── Email-only mode: read sheet and send digest, skip all scraping ─────
     if args.email_only:
