@@ -16,6 +16,7 @@ import argparse
 # LOAD CLIENT DNA (JSON)
 # ════════════════════════════════════════════════════════════
 parser = argparse.ArgumentParser(description="Run PlanningScout Engine")
+parser.add_argument("--client",     required=True,                      help="Path to client JSON")
 parser.add_argument("--weeks",      type=int,            default=2,     help="Weeks to scrape")
 parser.add_argument("--batch",      type=str,            default="1/1", help="Batch e.g. 2/4")
 parser.add_argument("--no-email",   action="store_true",                help="Skip email at end of this run")
