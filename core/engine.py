@@ -16,8 +16,10 @@ import argparse
 # LOAD CLIENT DNA (JSON)
 # ════════════════════════════════════════════════════════════
 parser = argparse.ArgumentParser(description="Run PlanningScout Engine")
-parser.add_argument("--weeks",  type=int, default=2,   help="Weeks to scrape")
-parser.add_argument("--batch",  type=str, default="1/1", help="Batch slice e.g. 2/4 = second of four batches")
+parser.add_argument("--weeks",      type=int,            default=2,     help="Weeks to scrape")
+parser.add_argument("--batch",      type=str,            default="1/1", help="Batch e.g. 2/4")
+parser.add_argument("--no-email",   action="store_true",                help="Skip email at end of this run")
+parser.add_argument("--email-only", action="store_true",                help="Skip scraping, just send digest from sheet")
 args = parser.parse_args()
 
 with open(args.client, "r", encoding="utf-8") as f:
@@ -2709,7 +2711,27 @@ def scrape_council(council, base_url, date_from, date_to):
 # MAIN
 # ════════════════════════════════════════════════════════════
 def run():
+    def run():
     run_start = datetime.now()
+
+    # ── Email-only mode: read sheet and send digest, skip all scraping ─────
+    if args.email_only:
+        log("📧 Email-only mode — reading sheet and sending digest")
+        if not get_sheet():
+            log("❌ Sheets connection failed"); return
+        weekly_count, weekly_leads = get_weekly_lead_count()
+        client_email = os.environ.get(CLIENT_EMAIL_VAR, "")
+        os.environ["GMAIL_TO"] = client_email
+        email_digest.send_digest(
+            [], {}, [],
+            "", "",
+            weekly_count=weekly_count,
+            weekly_leads=weekly_leads,
+            run_duration_min=0,
+            log_fn=log,
+        )
+        return
+
     today     = datetime.now()
     date_to   = today.strftime("%d/%m/%Y")
     date_from = (today - timedelta(weeks=WEEKS_TO_SCRAPE)).strftime("%d/%m/%Y")
@@ -2817,7 +2839,7 @@ live_councils, _dead = preflight_check(COUNCILS)
     #      guards against spurious fast crashes triggering email)
     #   3. Send regardless of 0 new leads — weekly_count from sheet still
     #      makes the email useful (shows what was already found)
-    if os.environ.get("GMAIL_APP_PASSWORD"):
+    if os.environ.get("GMAIL_APP_PASSWORD") and not args.no_email:
         councils_with_results = sum(1 for n in summary.values() if n >= 0)
         if run_duration_min < 1.0 and len(grand) == 0:
             log("⚠️  Run completed in < 1 min with 0 leads — suppressing email.")
