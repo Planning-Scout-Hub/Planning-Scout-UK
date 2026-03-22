@@ -2708,8 +2708,6 @@ def scrape_council(council, base_url, date_from, date_to):
     return qualified
 
 # ════════════════════════════════════════════════════════════
-# MAIN
-# ════════════════════════════════════════════════════════════
 # ════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════
@@ -2734,8 +2732,8 @@ def run():
         )
         return
 
-    today     = datetime.now()
-    date_to   = today.strftime("%d/%m/%Y")
+    today = datetime.now()
+    date_to = today.strftime("%d/%m/%Y")
     date_from = (today - timedelta(weeks=WEEKS_TO_SCRAPE)).strftime("%d/%m/%Y")
 
     print("=" * 60)
@@ -2758,8 +2756,8 @@ def run():
 
     # ── Batch slicing — splits live councils for parallel GitHub Actions jobs ──
     _batch_num, _batch_total = (int(x) for x in args.batch.split("/"))
-    _all_items   = list(live_councils.items())
-    _chunk_size  = -(-len(_all_items) // _batch_total)   # ceiling division
+    _all_items = list(live_councils.items())
+    _chunk_size = -(-len(_all_items) // _batch_total)
     _batch_slice = _all_items[(_batch_num-1)*_chunk_size : _batch_num*_chunk_size]
     live_councils = dict(_batch_slice)
     
@@ -2769,10 +2767,10 @@ def run():
 
     # ── Step 3: scrape every live council ───────────────────
     import random
-    grand   = []
+    grand = []
     summary = {}
-    failed  = []
-    total   = len(live_councils)
+    failed = []
+    total = len(live_councils)
 
     for idx, (name, url) in enumerate(live_councils.items()):
         log(f"\n{'━'*60}")
@@ -2793,17 +2791,14 @@ def run():
             time.sleep(pause)
 
     grand.sort(key=lambda x: x["score"], reverse=True)
-
     run_duration_min = (datetime.now() - run_start).total_seconds() / 60
 
-    # ── Step 4: count leads added in the past 7 days from the sheet ────────
+    # ── Step 4: count leads ──────────────────────────────────
     weekly_count, weekly_leads = get_weekly_lead_count()
 
-    # ── Final report ─────────────────────────────────────────
     print(f"\n{'='*60}")
     print(f"📊 FINAL RESULTS")
     print(f"{'='*60}")
-    # ... (rest of your print statements)
 
     print(f"\n  Run duration: {run_duration_min:.1f} minutes")
     print(f"  Councils attempted:  {total}")
