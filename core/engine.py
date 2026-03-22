@@ -2858,7 +2858,7 @@ if not os.environ.get("GCP_SERVICE_ACCOUNT_JSON"):
 if __name__ == "__main__":
 
     # 1. HANDLE EMAIL-ONLY MODE FIRST
-    if args.email_only:
+if args.email_only:
         log("📧 Running in Email-Only Mode. Skipping scrape...")
         if get_sheet():
             weekly_count, weekly_leads = get_weekly_lead_count()
