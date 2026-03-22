@@ -2711,7 +2711,6 @@ def scrape_council(council, base_url, date_from, date_to):
 # MAIN
 # ════════════════════════════════════════════════════════════
 def run():
-    def run():
     run_start = datetime.now()
 
     # ── Email-only mode: read sheet and send digest, skip all scraping ─────
@@ -2733,8 +2732,6 @@ def run():
         return
 
     today     = datetime.now()
-    date_to   = today.strftime("%d/%m/%Y")
-    date_from = (today - timedelta(weeks=WEEKS_TO_SCRAPE)).strftime("%d/%m/%Y")
 
     print("=" * 60)
     print(f"🏗️  MAPlanning Retail Lead Engine v20")
