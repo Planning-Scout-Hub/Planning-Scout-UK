@@ -2711,10 +2711,11 @@ def scrape_council(council, base_url, date_from, date_to):
 # ════════════════════════════════════════════════════════════
 def run():
     run_start = datetime.now()
-        if args.email_only:
+    if args.email_only:
         log("📧 Email-only mode — reading sheet and sending digest")
         if not get_sheet():
-            log("❌ Sheets connection failed"); return
+            log("❌ Sheets connection failed"); 
+            return
         weekly_count, weekly_leads = get_weekly_lead_count()
         client_email = os.environ.get(CLIENT_EMAIL_VAR, "")
         os.environ["GMAIL_TO"] = client_email
