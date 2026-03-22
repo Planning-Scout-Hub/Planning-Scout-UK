@@ -2711,6 +2711,7 @@ def scrape_council(council, base_url, date_from, date_to):
 # ════════════════════════════════════════════════════════════
 def run():
     run_start = datetime.now()
+    
     if args.email_only:
         log("📧 Email-only mode — reading sheet and sending digest")
         if not get_sheet():
