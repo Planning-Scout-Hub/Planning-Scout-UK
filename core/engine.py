@@ -2852,22 +2852,30 @@ if not os.environ.get("GCP_SERVICE_ACCOUNT_JSON"):
     except Exception:
         pass  # already authenticated or running locally
 
-if args.email_only:
-    log("📧 Email-only mode — reading sheet and sending digest")
-    if get_sheet():
-        weekly_count, weekly_leads = get_weekly_lead_count()
-        client_email = os.environ.get(CLIENT_EMAIL_VAR, "")
-        if not client_email:
-            log(f"⚠️ Warning: GitHub Secret {CLIENT_EMAIL_VAR} not found. Email may not send.")
-        os.environ["GMAIL_TO"] = client_email
-        email_digest.send_digest(
-            [], {}, [], "", "",
-            weekly_count=weekly_count,
-            weekly_leads=weekly_leads,
-            run_duration_min=0,
-            log_fn=log,
-        )
-    else:
-        log("❌ Sheets connection failed — email-only mode aborted")
-else:
+# ══════════════════════════════════════════════════════════
+# MAIN EXECUTION
+# ══════════════════════════════════════════════════════════
+if __name__ == "__main__":
+
+    # 1. HANDLE EMAIL-ONLY MODE FIRST
+    if args.email_only:
+        log("📧 Running in Email-Only Mode. Skipping scrape...")
+        if get_sheet():
+            weekly_count, weekly_leads = get_weekly_lead_count()
+            client_email = os.environ.get(CLIENT_EMAIL_VAR, "")
+            if not client_email:
+                log(f"⚠️ Warning: GitHub Secret {CLIENT_EMAIL_VAR} not found.")
+            os.environ["GMAIL_TO"] = client_email
+            email_digest.send_digest(
+                [], {}, [], "", "",
+                weekly_count=weekly_count,
+                weekly_leads=weekly_leads,
+                run_duration_min=0,
+                log_fn=log,
+            )
+        else:
+            log("❌ Sheets connection failed — email-only aborted")
+        sys.exit(0)
+
+    # 2. MAIN SCRAPER (only runs if email_only is NOT triggered)
     run()
