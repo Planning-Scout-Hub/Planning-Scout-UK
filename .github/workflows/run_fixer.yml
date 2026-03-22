@@ -6,6 +6,8 @@ on:
 jobs:
   fix:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -15,115 +17,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Run fixer
-        run: |
-          python3 - << 'PYEOF'
-          import ast, sys, os
-
-          PATH = "core/engine.py"
-          with open(PATH, "r", encoding="utf-8") as f:
-              src = f.read()
-          print(f"Read {len(src.splitlines())} lines")
-
-          # Fix 1: ensure --client argument exists
-          if 'add_argument("--client"' not in src:
-              src = src.replace(
-                  'parser.add_argument("--weeks"',
-                  'parser.add_argument("--client",     required=True,                      help="Path to client JSON")\nparser.add_argument("--weeks"',
-                  1
-              )
-              print("Fix 1: --client added")
-          else:
-              print("Fix 1: --client already present")
-
-          # Fix 2: remove email_only block from inside run()
-          lines = src.split('\n')
-          new_lines = []
-          i = 0
-          skip = False
-          fixed2 = False
-          while i < len(lines):
-              line = lines[i]
-              if line == 'def run():':
-                  new_lines.append(line)
-                  i += 1
-                  continue
-              if not skip and line.strip().startswith('run_start = datetime.now()'):
-                  new_lines.append('    run_start = datetime.now()')
-                  skip = True
-                  i += 1
-                  continue
-              if skip:
-                  if lines[i].strip().startswith('today = datetime.now()'):
-                      new_lines.append('    today = datetime.now()')
-                      skip = False
-                      fixed2 = True
-                      i += 1
-                      continue
-                  else:
-                      i += 1
-                      continue
-              new_lines.append(line)
-              i += 1
-          src = '\n'.join(new_lines)
-          print(f"Fix 2: email_only removed from run() = {fixed2}")
-
-          # Fix 3: replace bare run() at end with __main__ block
-          old_end = '\nrun()\n'
-          new_end = '''
-if __name__ == "__main__":
-
-    if args.email_only:
-        log("Email-only mode - skipping scrape")
-        if get_sheet():
-            weekly_count, weekly_leads = get_weekly_lead_count()
-            client_email = os.environ.get(CLIENT_EMAIL_VAR, "")
-            if not client_email:
-                log("Warning: email recipient secret not found")
-            os.environ["GMAIL_TO"] = client_email
-            email_digest.send_digest(
-                [], {}, [], "", "",
-                weekly_count=weekly_count,
-                weekly_leads=weekly_leads,
-                run_duration_min=0,
-                log_fn=log,
-            )
-        else:
-            log("Sheets connection failed")
-        sys.exit(0)
-
-    run()
-'''
-          if old_end in src:
-              src = src[:src.rfind(old_end)] + new_end
-              print("Fix 3: __main__ block added")
-          elif 'if __name__ == "__main__":' in src:
-              print("Fix 3: __main__ already present")
-          else:
-              src = src.rstrip('\n') + new_end
-              print("Fix 3: __main__ appended")
-
-          # Fix 4: strip all trailing whitespace
-          src = '\n'.join(l.rstrip() for l in src.split('\n')).rstrip('\n') + '\n'
-          print("Fix 4: trailing whitespace stripped")
-
-          # Syntax check
-          try:
-              ast.parse(src)
-              print("SYNTAX: CLEAN")
-          except SyntaxError as e:
-              print(f"SYNTAX ERROR line {e.lineno}: {e.msg}")
-              sys.exit(1)
-
-          with open(PATH, "w", encoding="utf-8") as f:
-              f.write(src)
-          print(f"Written: {len(src.splitlines())} lines")
-          PYEOF
+      - name: Fix engine.py
+        run: python3 scripts/fixer.py
 
       - name: Commit fixed engine
         run: |
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add core/engine.py
-          git diff --cached --quiet && echo "No changes to commit" || git commit -m "fix: resolve engine.py IndentationError"
+          git diff --cached --quiet && echo "No changes" || git commit -m "fix: resolve engine.py IndentationError"
           git push
