@@ -16,8 +16,8 @@ import argparse
 # LOAD CLIENT DNA (JSON)
 # ════════════════════════════════════════════════════════════
 parser = argparse.ArgumentParser(description="Run PlanningScout Engine")
-parser.add_argument("--client", required=True, help="Path to client JSON")
-parser.add_argument("--weeks", type=int, default=2, help="Weeks to scrape") # Added this
+parser.add_argument("--weeks",  type=int, default=2,   help="Weeks to scrape")
+parser.add_argument("--batch",  type=str, default="1/1", help="Batch slice e.g. 2/4 = second of four batches")
 args = parser.parse_args()
 
 with open(args.client, "r", encoding="utf-8") as f:
@@ -2728,9 +2728,20 @@ def run():
     load_existing_refs()
 
     # ── Step 2: pre-flight — fast parallel check ───────────
-    live_councils, _dead = preflight_check(COUNCILS)
+live_councils, _dead = preflight_check(COUNCILS)
     if not live_councils:
         print("❌ No reachable councils — check network"); return
+
+    # ── Batch slicing — splits live councils for parallel GitHub Actions jobs ──
+    # Format: "2/4" = second batch of four. Default "1/1" = all councils (unchanged behaviour).
+    _batch_num, _batch_total = (int(x) for x in args.batch.split("/"))
+    _all_items   = list(live_councils.items())
+    _chunk_size  = -(-len(_all_items) // _batch_total)   # ceiling division
+    _batch_slice = _all_items[(_batch_num-1)*_chunk_size : _batch_num*_chunk_size]
+    live_councils = dict(_batch_slice)
+    log(f"📦 Batch {_batch_num}/{_batch_total}: {len(live_councils)} councils assigned")
+    if not live_councils:
+        log("⚠️  No councils in this batch — exiting cleanly"); return
 
     # ── Step 3: scrape every live council ───────────────────
     import random
