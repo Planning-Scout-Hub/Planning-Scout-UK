@@ -13,7 +13,7 @@ Env vars required (set as GitHub Secrets):
   GMAIL_APP_PASSWORD        — Gmail App Password (16 chars, no spaces)
   GMAIL_TO                  — comma-separated recipients
                               e.g. "you@gmail.com" for test
-                              e.g. "contact@maplanning.co.uk" for Mark
+                              e.g. "inger.balaj@gmail.com" for Mark
                               e.g. "you@gmail.com,contact@maplanning.co.uk" for both
 """
 
