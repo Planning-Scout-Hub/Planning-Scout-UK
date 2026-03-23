@@ -625,6 +625,12 @@ def get_weekly_lead_count():
                 # Handles both "2026-03-10 14:22" and "2026-03-10" formats
                 date_found = datetime.strptime(date_found_str[:10], "%Y-%m-%d")
                 if date_found >= cutoff:
+                    # Safely convert Google Sheets text score to an integer
+                    raw_score = row[11] if len(row) > 11 else "0"
+                    try:
+                        score_int = int(raw_score.strip())
+                    except ValueError:
+                        score_int = 0  # Fallback if the cell is blank or has weird text
                     weekly_leads.append({
                         "council": row[0] if row else "",
                         "ref":     row[1] if len(row) > 1 else "",
