@@ -16,11 +16,8 @@ import argparse
 # LOAD CLIENT DNA (JSON)
 # ════════════════════════════════════════════════════════════
 parser = argparse.ArgumentParser(description="Run PlanningScout Engine")
-parser.add_argument("--client",     required=True,                      help="Path to client JSON")
-parser.add_argument("--weeks",      type=int,            default=2,     help="Weeks to scrape")
-parser.add_argument("--batch",      type=str,            default="1/1", help="Batch e.g. 2/4")
-parser.add_argument("--no-email",   action="store_true",                help="Skip email at end of this run")
-parser.add_argument("--email-only", action="store_true",                help="Skip scraping, just send digest from sheet")
+parser.add_argument("--client", required=True, help="Path to client JSON")
+parser.add_argument("--weeks", type=int, default=2, help="Weeks to scrape") # Added this
 args = parser.parse_args()
 
 with open(args.client, "r", encoding="utf-8") as f:
@@ -2707,32 +2704,14 @@ def scrape_council(council, base_url, date_from, date_to):
 
     log(f"\n✅ {council}: {len(qualified)} qualified leads")
     return qualified
+
 # ════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════
 def run():
     run_start = datetime.now()
-    
-    if args.email_only:
-        log("📧 Email-only mode — reading sheet and sending digest")
-        if not get_sheet():
-            log("❌ Sheets connection failed"); 
-            return
-        weekly_count, weekly_leads = get_weekly_lead_count()
-        client_email = os.environ.get(CLIENT_EMAIL_VAR, "")
-        os.environ["GMAIL_TO"] = client_email
-        email_digest.send_digest(
-            [], {}, [],
-            "", "",
-            weekly_count=weekly_count,
-            weekly_leads=weekly_leads,
-            run_duration_min=0,
-            log_fn=log,
-        )
-        return
-
-    today = datetime.now()
-    date_to = today.strftime("%d/%m/%Y")
+    today     = datetime.now()
+    date_to   = today.strftime("%d/%m/%Y")
     date_from = (today - timedelta(weeks=WEEKS_TO_SCRAPE)).strftime("%d/%m/%Y")
 
     print("=" * 60)
@@ -2753,23 +2732,12 @@ def run():
     if not live_councils:
         print("❌ No reachable councils — check network"); return
 
-    # ── Batch slicing — splits live councils for parallel GitHub Actions jobs ──
-    _batch_num, _batch_total = (int(x) for x in args.batch.split("/"))
-    _all_items = list(live_councils.items())
-    _chunk_size = -(-len(_all_items) // _batch_total)
-    _batch_slice = _all_items[(_batch_num-1)*_chunk_size : _batch_num*_chunk_size]
-    live_councils = dict(_batch_slice)
-    
-    log(f"📦 Batch {_batch_num}/{_batch_total}: {len(live_councils)} councils assigned")
-    if not live_councils:
-        log("⚠️  No councils in this batch — exiting cleanly"); return
-
     # ── Step 3: scrape every live council ───────────────────
     import random
-    grand = []
+    grand   = []
     summary = {}
-    failed = []
-    total = len(live_councils)
+    failed  = []
+    total   = len(live_councils)
 
     for idx, (name, url) in enumerate(live_councils.items()):
         log(f"\n{'━'*60}")
@@ -2790,11 +2758,14 @@ def run():
             time.sleep(pause)
 
     grand.sort(key=lambda x: x["score"], reverse=True)
+
     run_duration_min = (datetime.now() - run_start).total_seconds() / 60
 
-    # ── Step 4: count leads ──────────────────────────────────
+    # ── Step 4: count leads added in the past 7 days from the sheet ────────
+    # This runs AFTER scraping so newly-written leads are included in the count.
     weekly_count, weekly_leads = get_weekly_lead_count()
 
+    # ── Final report ─────────────────────────────────────────
     print(f"\n{'='*60}")
     print(f"📊 FINAL RESULTS")
     print(f"{'='*60}")
@@ -2835,7 +2806,7 @@ def run():
     #      guards against spurious fast crashes triggering email)
     #   3. Send regardless of 0 new leads — weekly_count from sheet still
     #      makes the email useful (shows what was already found)
-    if os.environ.get("GMAIL_APP_PASSWORD") and not args.no_email:
+    if os.environ.get("GMAIL_APP_PASSWORD"):
         councils_with_results = sum(1 for n in summary.values() if n >= 0)
         if run_duration_min < 1.0 and len(grand) == 0:
             log("⚠️  Run completed in < 1 min with 0 leads — suppressing email.")
