@@ -48,13 +48,11 @@ while i < len(lines):
 src = '\n'.join(new_lines)
 print(f"Fix 2: email_only removed from run() = {fixed2}")
 
-# Fix 3: find def run(): and cut EVERYTHING after the closing of that function.
-# We keep lines from start up to (but not including) the first line at col 0
-# that appears after def run(): — whether it's if __name__, a comment, or run().
-# Then we append a clean known-good ending.
+# Fix 3: ALWAYS cut everything from def run(): closing line onwards
+# and replace with clean known-good ending.
+# Never skip this step regardless of what is already there.
 lines = src.split('\n')
 
-# Find def run():
 run_def_idx = None
 for i, l in enumerate(lines):
     if l.strip() == 'def run():':
@@ -65,53 +63,58 @@ if run_def_idx is None:
     print("ERROR: def run(): not found")
     sys.exit(1)
 
-# Find the LAST line that belongs to run() — scan backwards from end of file
-# to find where the indented block of run() ends
+# Find where run() ends: first line at column 0 after run_def_idx
 run_end_idx = len(lines)
 for i in range(run_def_idx + 1, len(lines)):
     l = lines[i]
-    # A line at col 0 that is non-empty and non-comment = end of function
     if l and not l[0].isspace():
         run_end_idx = i
         break
 
-print(f"Fix 3: cutting from line {run_end_idx} ('{lines[run_end_idx][:60] if run_end_idx < len(lines) else 'EOF'}')")
+print(f"Fix 3: cutting everything from line {run_end_idx} onwards (was: '{lines[run_end_idx][:50] if run_end_idx < len(lines) else 'EOF'}')")
 
-# Keep only lines that are part of run() and before
+# Keep only up to end of run() body
 src = '\n'.join(lines[:run_end_idx]).rstrip('\n')
 
-# Append clean ending
-src += '\n\n# ── Authenticate Google ──────────────────────────────────────\n'
-src += 'if not os.environ.get("GCP_SERVICE_ACCOUNT_JSON"):\n'
-src += '    try:\n'
-src += '        from google.colab import auth\n'
-src += '        auth.authenticate_user()\n'
-src += '        print("Google Colab auth done")\n'
-src += '    except Exception:\n'
-src += '        pass\n'
-src += '\n'
-src += 'if __name__ == "__main__":\n'
-src += '    if args.email_only:\n'
-src += '        log("Email-only mode - skipping scrape")\n'
-src += '        if get_sheet():\n'
-src += '            weekly_count, weekly_leads = get_weekly_lead_count()\n'
-src += '            client_email = os.environ.get(CLIENT_EMAIL_VAR, "")\n'
-src += '            if not client_email:\n'
-src += '                log("Warning: email recipient secret not found")\n'
-src += '            os.environ["GMAIL_TO"] = client_email\n'
-src += '            email_digest.send_digest(\n'
-src += '                [], {}, [], "", "",\n'
-src += '                weekly_count=weekly_count,\n'
-src += '                weekly_leads=weekly_leads,\n'
-src += '                run_duration_min=0,\n'
-src += '                log_fn=log,\n'
-src += '            )\n'
-src += '        else:\n'
-src += '            log("Sheets connection failed")\n'
-src += '        sys.exit(0)\n'
-src += '    run()\n'
+# Append clean ending built line by line — no multiline strings, no heredocs
+ending = []
+ending.append('')
+ending.append('')
+ending.append('# ── Authenticate Google ──────────────────────────────────────')
+ending.append('if not os.environ.get("GCP_SERVICE_ACCOUNT_JSON"):')
+ending.append('    try:')
+ending.append('        from google.colab import auth')
+ending.append('        auth.authenticate_user()')
+ending.append('        print("Google Colab auth done")')
+ending.append('    except Exception:')
+ending.append('        pass')
+ending.append('')
+ending.append('')
+ending.append('if __name__ == "__main__":')
+ending.append('    if args.email_only:')
+ending.append('        log("Email-only mode - skipping scrape")')
+ending.append('        if get_sheet():')
+ending.append('            weekly_count, weekly_leads = get_weekly_lead_count()')
+ending.append('            client_email = os.environ.get(CLIENT_EMAIL_VAR, "")')
+ending.append('            if not client_email:')
+ending.append('                log("Warning: email recipient secret not found")')
+ending.append('            os.environ["GMAIL_TO"] = client_email')
+ending.append('            email_digest.send_digest(')
+ending.append('                [], {}, [], "", "",')
+ending.append('                weekly_count=weekly_count,')
+ending.append('                weekly_leads=weekly_leads,')
+ending.append('                run_duration_min=0,')
+ending.append('                log_fn=log,')
+ending.append('            )')
+ending.append('        else:')
+ending.append('            log("Sheets connection failed")')
+ending.append('        sys.exit(0)')
+ending.append('    run()')
+ending.append('')
 
-# Fix 4: strip all trailing whitespace
+src = src + '\n' + '\n'.join(ending)
+
+# Fix 4: strip all trailing whitespace from every single line
 src = '\n'.join(l.rstrip() for l in src.split('\n')).rstrip('\n') + '\n'
 print("Fix 4: trailing whitespace stripped")
 
