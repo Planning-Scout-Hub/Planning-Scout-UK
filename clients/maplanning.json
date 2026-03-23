@@ -34,11 +34,14 @@
   "exclude_words": [
     "discharge of condition", "discharge of planning condition", "reserved matters", 
     "approval of details", "approval of reserved", "details reserved by condition", 
-    "condition discharge", "prior approval", "lawful development", "certificate of lawful", 
-    "advertisement consent", "listed building consent", "tree preservation", "hedgerow removal", 
+    "condition discharge", "certificate of lawful", 
+    "advertisement consent", "listed building consent", "hedgerow removal", 
     "non-material amendment", "minor material amendment", "section 73", "s73", "screening opinion", 
     "scoping opinion", "environmental impact assessment screening", "prior notification", 
     "class ma", "part 6", "part 7", "notification under", "prior notification under", 
-    "telecommunications", "street works", "temporary structure"
+    "telecommunications", "street works", "temporary structure", "HMO", "House in Multiple Occupation", 
+    "Hostel", "C4 use", "Sui Generis HMO", "prior approval", "lawful development", 
+    "tree preservation", "single storey extension",
+    "loft conversion", "porch", "garage alteration"
   ]
 }
