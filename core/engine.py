@@ -2728,9 +2728,19 @@ def run():
     load_existing_refs()
 
     # ── Step 2: pre-flight — fast parallel check ───────────
+    # ── Step 2: pre-flight — fast parallel check ───────────
     live_councils, _dead = preflight_check(COUNCILS)
     if not live_councils:
         print("❌ No reachable councils — check network"); return
+
+    # ── Batch slicing (set SCRAPE_BATCH env var e.g. "2/4") ─  # NEW
+    _batch = os.environ.get("SCRAPE_BATCH", "1/1")              # NEW
+    _bnum, _btotal = int(_batch.split("/")[0]), int(_batch.split("/")[1])  # NEW
+    _items = list(live_councils.items())                         # NEW
+    _size  = -(-len(_items) // _btotal)                         # NEW
+    _slice = _items[(_bnum - 1) * _size : _bnum * _size]        # NEW
+    live_councils = dict(_slice)                                 # NEW
+    log(f"Batch {_bnum}/{_btotal}: {len(live_councils)} councils")  # NEW
 
     # ── Step 3: scrape every live council ───────────────────
     import random
