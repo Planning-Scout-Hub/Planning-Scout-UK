@@ -1,14 +1,8 @@
 name: MAPlanning — Weekly Scraper
 
-# ── WHEN IT RUNS ─────────────────────────────────────────────
 on:
   schedule:
-    # Every Monday at 06:00 UTC = 07:00 Spain (winter) / 08:00 (summer)
-    # The scraper takes 60–90 min, so email arrives ~08:00–09:00 Spain time
     - cron: '0 6 * * 1'
-
-  # Manual trigger — click "Run workflow" in GitHub → Actions tab
-  # Use this for: testing, backfill runs, sending to new client
   workflow_dispatch:
     inputs:
       weeks:
@@ -16,40 +10,34 @@ on:
         required: false
         default: '2'
 
-# ── WHAT IT DOES ──────────────────────────────────────────────
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 360   # kill after 6h if something hangs
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: ["1/4", "2/4", "3/4", "4/4"]
 
     steps:
-      # 1. Download the repo code
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # 2. Set up Python
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # 3. Install Python packages
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # 4. Run the scraper
-      #    - For scheduled runs: uses default 2 weeks
-      #    - For manual runs: uses the 'weeks' input you typed
-      - name: Run MAPlanning scraper
+      - name: Run MAPlanning scraper — batch ${{ matrix.batch }}
         env:
-          # Google Sheets auth
           GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
-          # Gmail credentials (shared across all clients)
-          GMAIL_FROM:         ${{ secrets.GMAIL_FROM }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          # MAPlanning-specific recipient — set in GitHub Secrets
-          # Value: inger.balaj@gmail.com  (or comma-separated for multiple)
-          GMAIL_TO_MAPLANNING: ${{ secrets.GMAIL_TO_MAPLANNING }}
+          GMAIL_FROM:               ${{ secrets.GMAIL_FROM }}
+          GMAIL_APP_PASSWORD:       ${{ secrets.GMAIL_APP_PASSWORD }}
+          GMAIL_TO_MAPLANNING:      ${{ secrets.GMAIL_TO_MAPLANNING }}
+          SCRAPE_BATCH:             ${{ matrix.batch }}
         run: |
           WEEKS=${{ github.event.inputs.weeks || '2' }}
           python core/engine.py --client clients/maplanning.json --weeks $WEEKS
