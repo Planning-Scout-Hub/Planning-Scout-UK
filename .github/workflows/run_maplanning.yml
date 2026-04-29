@@ -40,4 +40,4 @@ jobs:
           SCRAPE_BATCH:             ${{ matrix.batch }}
         run: |
           WEEKS=${{ github.event.inputs.weeks || '2' }}
-          python core/engine.py --client clients/maplanning.json --weeks $WEEKS
+          python core/engine.py --weeks 2
