@@ -13,29 +13,97 @@ import os, json
 import argparse
 
 # ════════════════════════════════════════════════════════════
-# LOAD CLIENT DNA (JSON)
+# CLIENT CONFIG — MAPlanning (inlined — no external JSON file needed)
+# Edit the values below to change keywords, scoring, or target sheet.
 # ════════════════════════════════════════════════════════════
-parser = argparse.ArgumentParser(description="Run PlanningScout Engine")
-parser.add_argument("--client", required=True, help="Path to client JSON")
-parser.add_argument("--weeks", type=int, default=2, help="Weeks to scrape") # Added this
-args = parser.parse_args()
+CLIENT_CONFIG = {
+    "client_id":            "maplanning",
+    "client_name":          "MAPlanning",
+    "sheet_id":             "172bpv-b2_nK5ENE1XPk5rWeokvnr1sjHvLBfVzHWh6c",
+    "email_to_secret_name": "GMAIL_TO_MAPLANNING",
+    "client_type":          "retail",
+    "min_lead_score":       60,
+    "preferred_documents":  ["Decision Notice"],
 
-with open(args.client, "r", encoding="utf-8") as f:
-    CLIENT_CONFIG = json.load(f)
+    "search_keywords": [
+        "Class E", "change of use", "use class e", "shop", "retail",
+        "supermarket", "convenience", "food store", "discount store",
+        "café", "cafe", "restaurant", "hot food", "takeaway",
+        "coffee shop", "gym", "fitness", "hair", "beauty", "nail",
+        "barber", "health centre", "clinic", "office", "workspace",
+        "sui generis", "betting", "amusement", "car wash", "mixed use",
+        "pharmacy", "optician", "drive-through", "drive through",
+        "food and drink",
+    ],
 
-# The engine now gets all its rules from the JSON file
+    "pdf_triggers": [
+        "out of centre", "out-of-centre", "outside the town centre",
+        "outside a defined centre", "edge of centre", "edge-of-centre",
+        "edge of the town centre", "sequential", "sequential test",
+        "sequential approach", "sequential assessment", "sequential preference",
+        "sequential search", "sequential step", "no sequential",
+        "fails the sequential", "failed the sequential", "fail the sequential",
+        "sequentially preferable", "lack of evidence", "insufficient evidence",
+        "no evidence", "lack of information", "insufficient information",
+        "failure to demonstrate", "failed to demonstrate",
+        "fails to demonstrate", "not demonstrated", "has not demonstrated",
+        "cannot demonstrate", "unable to demonstrate",
+        "no information provided", "no assessment", "has not been submitted",
+        "not been submitted", "not been provided", "has not been provided",
+        "was not submitted", "absence of", "in the absence of",
+        "retail impact assessment", "retail impact study",
+        "harm to the vitality and viability", "harm to the vitality",
+        "adverse impact on the vitality", "undermine the vitality",
+        "prejudice the vitality", "no identified need", "no quantitative need",
+        "no qualitative need", "need has not been",
+        "need has not been demonstrated", "no overriding need",
+        "need not been established", "unmet need", "no need has been",
+        "insufficient justification", "failed to justify",
+        "fails to justify", "not justified",
+    ],
+
+    "exclude_words": [
+        "discharge of condition", "discharge of planning condition",
+        "reserved matters", "approval of details", "approval of reserved",
+        "details reserved by condition", "condition discharge",
+        "certificate of lawful", "advertisement consent",
+        "listed building consent", "hedgerow removal",
+        "non-material amendment", "minor material amendment",
+        "section 73", "s73", "screening opinion", "scoping opinion",
+        "environmental impact assessment screening", "prior notification",
+        "class ma", "part 6", "part 7", "notification under",
+        "prior notification under", "telecommunications", "street works",
+        "temporary structure", "HMO", "House in Multiple Occupation",
+        "Hostel", "C4 use", "Sui Generis HMO", "prior approval",
+        "lawful development", "tree preservation", "single storey extension",
+        "loft conversion", "porch", "garage alteration",
+    ],
+}
+
+# ── Flat constants derived from config ──────────────────────────────────────
 SHEET_ID        = CLIENT_CONFIG["sheet_id"]
-WEEKS_TO_SCRAPE = args.weeks  # This now listens to GitHub Actions
 RETAIL_KEYWORDS = CLIENT_CONFIG["search_keywords"]
 PDF_TRIGGERS    = CLIENT_CONFIG["pdf_triggers"]
 EXCLUDE_WORDS   = CLIENT_CONFIG["exclude_words"]
 MIN_LEAD_SCORE  = CLIENT_CONFIG["min_lead_score"]
 CLIENT_EMAIL_VAR= CLIENT_CONFIG["email_to_secret_name"]
-# ── Client type controls scoring logic ───────────────────────────────────────
-# "retail"  → MAPlanning mode: Class E, sequential test, retail impact
-# "rural"   → Aynsley mode:    NP/AONB, agricultural, barn conversion, heritage
-# Default "retail" if not specified (backwards compatible with all existing configs)
 CLIENT_TYPE     = CLIENT_CONFIG.get("client_type", "retail")
+
+# ── CLI: --weeks = how far back; --mode = what to look for ──────────────────
+# Usage examples:
+#   python engine_ma.py --weeks 2              (default: find refusals, 2-week window)
+#   python engine_ma.py --weeks 4 --mode both  (refusals + competitor alerts)
+#   python engine_ma.py --mode applications    (only competitor alerts)
+parser = argparse.ArgumentParser(description="MAPlanning Retail Lead Engine v21")
+parser.add_argument("--weeks", type=int, default=2,
+                    help="Weeks of applications to scan (default 2)")
+parser.add_argument("--mode",  type=str, default="decisions",
+                    choices=["decisions", "applications", "both"],
+                    help="decisions=refused apps | applications=competitor alerts | both")
+args, _unknown = parser.parse_known_args()
+WEEKS_TO_SCRAPE = args.weeks
+RUN_MODE        = args.mode
+
 import email_digest
 import pdfplumber
 
@@ -347,6 +415,15 @@ SLOW_COUNCILS = {
 def log(msg, i=0):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {'  '*i}{msg}", flush=True)
 
+_ENGINE_START      = datetime.now()
+_MAX_RUNTIME_HOURS = float(os.environ.get("MAX_RUNTIME_HOURS", "5.5"))
+
+def time_ok(need_s: int = 120) -> bool:
+    """True if we have at least need_s seconds of budget remaining."""
+    elapsed = (datetime.now() - _ENGINE_START).total_seconds()
+    budget  = _MAX_RUNTIME_HOURS * 3600
+    return (budget - elapsed) > need_s
+
 # ════════════════════════════════════════════════════════════
 # SESSION
 # ════════════════════════════════════════════════════════════
@@ -509,9 +586,12 @@ SHEET_HEADERS = [
     "Applicant", "Agent", "Date Received", "Date Decided", "Decision",
     "Trigger Words", "Score", "Keyword", "Portal Link", "Decision Doc URL",
     "Date Found", "Mark's Comments",
-    # ── Sales Intelligence (added v16) ──
+    # ── Sales Intelligence ──────────────────────────────────────────────
     "Est. Project Value", "Developer", "Architect",
     "Impact Probability", "CH Number", "Registered Address", "Contact Link",
+    # ── Appeal window ───────────────────────────────────────────────────
+    "Days to Appeal",    # e.g. "142 days (deadline 15 Oct 2026)"
+    "Appeal Urgency",    # 0-100 urgency score
 ]
 
 _ws           = None   # cached worksheet
@@ -673,6 +753,9 @@ def write_lead(lead):
         lead.get("ch_number",""),
         lead.get("reg_address",""),
         lead.get("contact_link",""),
+        # Appeal window
+        lead.get("days_to_appeal", "Unknown"),
+        str(lead.get("appeal_urgency", "")),
     ]
 
     try:
@@ -1362,20 +1445,59 @@ def enrich_lead(lead):
     lead["architect"] = lead.get("agent","")
 
     # 5. Calculate Appeal Window
+    # NPPF: 6 months (182 days) from decision date for full planning appeals.
     lead["days_to_appeal"] = "Unknown"
     if lead.get("date_dec"):
         try:
-            # Idox dates are usually DD/MM/YYYY or DD-MMM-YYYY. Assume standard UK.
-            dec_date = datetime.strptime(lead["date_dec"].replace("-", "/"), "%d/%m/%Y")
-            appeal_deadline = dec_date + timedelta(days=182) # Approx 6 months
-            days_left = (appeal_deadline - datetime.now()).days
-            
-            if days_left > 0:
-                lead["days_to_appeal"] = f"{days_left} days left"
-            else:
-                lead["days_to_appeal"] = "Window Closed"
-        except Exception as e:
+            # Idox portals return dates in multiple formats — try all:
+            # "27/04/2026"  "27-Apr-2026"  "2026-04-27"  "27 Apr 2026"
+            _raw = lead["date_dec"].strip()
+            dec_date = None
+            for _fmt in ["%d/%m/%Y", "%d-%b-%Y", "%Y-%m-%d",
+                         "%d %b %Y", "%d-%m-%Y", "%d/%m/%y"]:
+                try:
+                    dec_date = datetime.strptime(_raw, _fmt)
+                    break
+                except ValueError:
+                    continue
+            if dec_date:
+                appeal_deadline = dec_date + timedelta(days=182)
+                days_left = (appeal_deadline - datetime.now()).days
+                if days_left > 60:
+                    lead["days_to_appeal"] = (
+                        f"{days_left}d remaining "
+                        f"(deadline {appeal_deadline.strftime('%d %b %Y')})"
+                    )
+                elif days_left > 0:
+                    lead["days_to_appeal"] = (
+                        f"⚠️ URGENT: {days_left}d left "
+                        f"(deadline {appeal_deadline.strftime('%d %b %Y')})"
+                    )
+                elif days_left > -30:
+                    lead["days_to_appeal"] = (
+                        f"⛔ CLOSED {abs(days_left)}d ago "
+                        f"({appeal_deadline.strftime('%d %b %Y')})"
+                    )
+                else:
+                    lead["days_to_appeal"] = "Window Closed"
+        except Exception:
             pass
+
+    # 6. Appeal urgency (retail-specific)
+    # High urgency when: evidence failures + recent decision + high score
+    _urgency = 30
+    desc_l = (lead.get("desc","") or "").lower()
+    trig_l = (lead.get("triggers","") or "").lower()
+    if any(w in trig_l for w in ("lack of evidence","failure to demonstrate",
+                                   "insufficient evidence","not been provided",
+                                   "not justified")):
+        _urgency += 25  # evidence failure = strong grounds, act fast
+    if any(w in trig_l for w in ("sequential test","out of centre","out-of-centre")):
+        _urgency += 20
+    if "retail impact" in trig_l:
+        _urgency += 15
+    _urgency += max(0, (score - 60) // 3)  # higher score = more urgent
+    lead["appeal_urgency"] = min(98, _urgency)
 
     return lead
 
@@ -2111,235 +2233,41 @@ def get_details(sess, base_url, key_val):
 # and resolves viewDocument.do to direct file URLs.
 # ════════════════════════════════════════════════════════════
 
-# Document type priority scores (higher = better)
-# Updated default scores
-def _score_text(text, custom_scores=None):
-    # Use JSON scores if provided, else use the default _DOC_SCORES
-    scores = custom_scores if custom_scores else _DOC_SCORES
-    t = text.lower().strip()
-    for phrase, s in sorted(scores.items(), key=lambda x: -x[1]):
-        if phrase in t:
-            return s
-    return 0
-
+# ── Document type scoring ─────────────────────────────────────────────────────
+# How to score a document by its label text. Higher = more likely to be
+# the Decision Notice we want to scan.
 _DOC_SCORES = {
-    "decision notice": 100, "refusal notice":  100,
-    "decision letter": 100, "refusal letter":  100,
-    "refusal":          95, "decision":         90,
-    "appeal decision":  80, "officer report":   40,
-    "committee report": 25, "planning statement": 60,
+    "decision notice":              100,
+    "decision":                     80,
+    "notice of decision":           80,
+    "planning permission":          70,
+    "refusal notice":               95,
+    "refusal of planning permission":95,
+    "officer report":               50,
+    "planning officer report":      50,
+    "delegated report":             50,
+    "committee report":             45,
+    "appeal decision":              85,
+    "inspector's decision":         85,
+    "planning inspectorate":        80,
 }
 
-# Updated refusal phrases (found around Line 333)
-_REFUSAL_PHRASES = [
-    "is refused", "be refused", "hereby refused", "refusal of",
-    "reasons for refusal", "reason for refusal", "refuse planning permission",
-    "refused planning permission", "application is refused",
-    "permission is refused", "appeal is dismissed",
-    "recommendation: refuse", "recommended for refusal", "refusal be granted"
-]
-
-def _score_text(text, custom_scores=None):
-    # Use JSON scores if provided, else use the default _DOC_SCORES (ensure _DOC_SCORES is defined above)
-    try:
-        scores = custom_scores if custom_scores else _DOC_SCORES
-    except NameError:
-        scores = {"decision notice": 100, "refusal notice": 100, "officer report": 30} # Fallback
-        
-    t = text.lower().strip()
-    for phrase, s in sorted(scores.items(), key=lambda x: -x[1]):
-        if phrase in t:
-            return s
-    return 0
-
-def find_decision_doc(sess, base_url, key_val, custom_scores=None):
+def _score_text(text: str, custom_scores=None) -> int:
     """
-    Fetch the Documents tab and find the best decision notice.
+    Score a document label/row text to identify the Decision Notice.
+    Returns 0 if not relevant, higher = more likely to be what we want.
+    Uses custom_scores dict if provided, else falls back to _DOC_SCORES.
     """
-    log(f"  📂 Documents tab…", 2)
-    from urllib.parse import urlparse
-    p    = urlparse(base_url)
-    root = f"{p.scheme}://{p.netloc}"
-
-    tab_url = f"{base_url}/applicationDetails.do?activeTab=documents&keyVal={key_val}"
-    r = sess.get(tab_url, timeout=25, allow_redirects=True, verify=False)
-    if not r or r.status_code != 200:
-        log(f"  ❌ Documents tab HTTP {getattr(r,'status_code','?')}", 2)
-        return None, None
-
-    soup = BeautifulSoup(r.text, "html.parser")
-    candidates = []
-
-    def _add(href, label, score):
-        u = _abs_url(root, base_url, href)
-        if u:
-            candidates.append({"score": score, "url": u, "label": label})
-
-    # ── Strategy 1: Table Rows ────────────────────────────────────
-    doc_tables = soup.find_all("table")
-    for tbl in doc_tables:
-        for row in tbl.find_all("tr"):
-            tds = row.find_all("td")
-            if len(tds) < 2: continue
-            row_text = " ".join(td.get_text(strip=True) for td in tds)
-            
-            # CHANGE HERE: Pass custom_scores
-            score = _score_text(row_text, custom_scores) 
-            
-            if score == 0: continue
-            for td in reversed(tds):
-                for a in td.find_all("a", href=True):
-                    _add(a["href"], row_text[:50], score)
-                    break
-
-    # ── Strategy 2: List Items ────────────────────────────────────
-    for li in soup.find_all("li"):
-        li_text = li.get_text(separator=" ", strip=True)
-        
-        # CHANGE HERE: Pass custom_scores
-        score = _score_text(li_text, custom_scores)
-        
-        if score == 0: continue
-        for a in li.find_all("a", href=True):
-            _add(a["href"], li_text[:50], score)
-
-    # ── Strategy 3: Direct Links ──────────────────────────────────
-    for a in soup.find_all("a", href=True):
-        link_text = a.get_text(strip=True)
-        parent_text = a.parent.get_text(separator=" ", strip=True) if a.parent else ""
-        
-        # CHANGE HERE: Pass custom_scores to both text checks
-        score = max(_score_text(link_text, custom_scores), _score_text(parent_text, custom_scores))
-        
-        if score >= 25: 
-            _add(a["href"], link_text[:50], score)
-
-    # Strategy 4: stays the same (it handles raw /files/ links)
-    for a in soup.find_all("a", href=True):
-        h = a["href"]
-        if "/files/" in h and ".pdf" in h.lower():
-            fname = h.split("/")[-1].lower()
-            score = 90 if any(w in fname for w in ["dec", "refus", "notice"]) else 10
-            _add(h, f"files/{h.split('/')[-1][:40]}", score)
-
-    seen_urls = {}
-    for cand in candidates:
-        u = cand["url"]
-        if u not in seen_urls or cand["score"] > seen_urls[u]["score"]:
-            seen_urls[u] = cand
-
-    ranked = sorted(seen_urls.values(), key=lambda x: -x["score"])
-    if not ranked:
-        log(f"  ❌ No document links found", 2)
-        return None, None
-
-    best = ranked[0]
-    log(f"  → Best: score={best['score']} | {best['url'][-65:]}", 2)
-
-    resolved_url, prefetched = _resolve_viewdoc(sess, best["url"], base_url, soup_of_doc_tab=soup)
-    return resolved_url, prefetched
-    
-def _abs_url(root, base_url, href):
-    if not href or href.startswith(("javascript:", "#", "mailto:")):
-        return None
-    if href.startswith("http"):
-        return href
-    if href.startswith("//"):
-        return "https:" + href
-    if href.startswith("/"):
-        return root + href
-    return base_url.rstrip("/") + "/" + href.lstrip("/")
-
-def _resolve_viewdoc(sess, url, base_url, soup_of_doc_tab=None):
-    """
-    Convert a session-gated viewDocument.do URL into a permanent direct file URL.
-
-    Idox portals serve decision PDFs in two ways:
-      A) 302 redirect  → /files/DC_WKSSDec/yyyy/mm/dd/filename.pdf  (permanent, no session)
-      B) Direct stream → 200 with PDF bytes, URL stays as viewDocument.do  (session required)
-
-    For case B, "Document Unavailable" appears when the URL is clicked from
-    email or Sheets because there is no active session cookie.
-
-    We try four strategies to escape case B:
-      1. r.history — any redirect step pointing to /files/
-      2. X-Accel-Redirect / X-Sendfile proxy headers
-      3. Scan documents tab HTML for /files/ hrefs on the same page
-      4. Check onclick / data-* attributes on doc tab elements
-
-    If none work: store the portal application URL (always public) as fallback.
-    The PDF bytes from the session fetch are still passed to scan_pdf regardless.
-    """
-    import re as _re
-    p    = urlparse(base_url)
-    root = f"{p.scheme}://{p.netloc}"
-
-    if "viewDocument.do" not in url and "downloadDocument" not in url:
-        return url, None
-
-    try:
-        r = sess.get(url, allow_redirects=True, timeout=40,
-                     headers={"Accept": "application/pdf,*/*", "Referer": base_url})
-
-        # Strategy 1: redirect chain — any step landing on /files/
-        for resp in list(r.history) + [r]:
-            u = getattr(resp, "url", "")
-            if "/files/" in u:
-                direct = root + u if u.startswith("/") else u
-                log(f"  ✅ Direct URL via redirect: …{direct[-60:]}", 2)
-                return direct, r
-
-        # Strategy 2: reverse-proxy sendfile headers
-        for hdr in ("X-Accel-Redirect", "X-Sendfile", "X-Reproxy-URL"):
-            val = r.headers.get(hdr, "").strip()
-            if val:
-                direct = root + val if val.startswith("/") else val
-                log(f"  ✅ Direct URL via {hdr}: …{direct[-60:]}", 2)
-                return direct, r
-
-        # Strategy 3: scan documents tab HTML for /files/ hrefs
-        if soup_of_doc_tab:
-            for a in soup_of_doc_tab.find_all("a", href=True):
-                h = a["href"]
-                if "/files/" in h:
-                    direct = root + h if h.startswith("/") else h
-                    log(f"  ✅ Direct /files/ link in HTML: …{direct[-60:]}", 2)
-                    return direct, r
-
-        # Strategy 4: onclick / data attributes in doc tab
-        if soup_of_doc_tab:
-            for tag in soup_of_doc_tab.find_all(True):
-                for attr in ("onclick", "data-url", "data-href", "data-src"):
-                    val = tag.get(attr, "")
-                    if "/files/" in val:
-                        m = _re.search(r"(/[^\s'\"]+/files/[^\s'\"]+)", val)
-                        if m:
-                            path = m.group(1)
-                            direct = root + path if path.startswith("/") else path
-                            log(f"  ✅ Direct URL in {attr}: …{direct[-60:]}", 2)
-                            return direct, r
-
-        # No permanent URL found — we still have the PDF bytes from this session
-        ct = r.headers.get("Content-Type", "").lower()
-        if "pdf" in ct or r.content[:4] == b"%PDF":
-            log(f"  ⚠️  Session-only URL (bytes available for scan, link may expire)", 2)
-            return url, r
-
-        return url, r
-
-    except Exception as e:
-        log(f"  ⚠️  viewDoc error: {e}", 2)
-        return url, None
-
-def _score_text(text, custom_scores=None):
-    # Use JSON scores if provided, else use the default _DOC_SCORES
     scores = custom_scores if custom_scores else _DOC_SCORES
     t = text.lower().strip()
-    for phrase, s in sorted(scores.items(), key=lambda x: -x[1]):
+    best = 0
+    for phrase, pts in scores.items():
         if phrase in t:
-            return s
-    return 0
-    
+            best = max(best, pts)
+    return best
+
+
+# Document type priority scores (higher = better)
 def find_decision_doc(sess, base_url, key_val, custom_scores=None): # Add custom_scores here
     """
     Fetch the Documents tab and find the best decision notice.
@@ -2714,6 +2642,495 @@ def scrape_council(council, base_url, date_from, date_to):
 # ════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════
+
+# ════════════════════════════════════════════════════════════════════════════════
+# MARK'S IDEA — COMPETITOR ALERT + AI OBJECTION DRAFT SYSTEM
+# ════════════════════════════════════════════════════════════════════════════════
+#
+# WHAT IT DOES:
+#   When a new retail/Class E planning application is submitted (not yet decided),
+#   the engine checks whether existing competitors are operating within 1,500m.
+#   If yes, it:
+#     1. Lists the nearby competitors with distances
+#     2. Drafts a formal planning objection using AI
+#     3. Writes all this to a "New Applications" tab in Google Sheets
+#     4. Sends Mark an email with the draft objection to review
+#
+# WHY IT MATTERS — SECOND REVENUE STREAM:
+#   Current model:  find REFUSED apps → help applicant appeal → fee from applicant
+#   New model:      find NEW apps → alert existing competitor → fee from incumbent
+#   These don't conflict — different clients, different moment, same expertise.
+#   Aldi/Lidl/McDonald's/Costa have no idea when a competitor applies nearby.
+#   MAPlanning becomes the early warning system — and charges for the objection.
+#
+# AI PROVIDER — SUPPORTS BOTH:
+#   Mark has OpenAI paid credits → set OPENAI_API_KEY GitHub secret
+#   If OPENAI_API_KEY not set, falls back to ANTHROPIC_API_KEY (Claude)
+#   If neither set → drafts a template objection without AI (still useful)
+#
+# REQUIRED GITHUB SECRETS:
+#   OPENAI_API_KEY       (or ANTHROPIC_API_KEY) — for AI objection drafting
+#   GOOGLE_MAPS_API_KEY  — for competitor proximity search (optional but recommended)
+#                          Without it: competitor check is skipped, only app found
+#
+# NEW GOOGLE SHEET TAB: "New Applications"
+#   Columns: Council | Ref | Address | Proposal | Applicant | Date Received |
+#             Competitor Count | Competitors (name + distance) | AI Objection Draft |
+#             Objection Quality | Status
+# ════════════════════════════════════════════════════════════════════════════════
+
+_COMPETITOR_RADIUS_M = 1500   # standard retail impact catchment (NPPF Annex 2)
+_COMPETITOR_TYPES = [
+    # (display label, Google Places type, description keywords that trigger this search)
+    ("Aldi",          "grocery_or_supermarket", ["aldi"]),
+    ("Lidl",          "grocery_or_supermarket", ["lidl"]),
+    ("Iceland",       "grocery_or_supermarket", ["iceland", "food warehouse"]),
+    ("B&M",           "department_store",       ["b&m", "b and m bargains"]),
+    ("Home Bargains",  "department_store",      ["home bargains"]),
+    ("McDonald's",    "restaurant",             ["mcdonald", "mcdonalds"]),
+    ("KFC",           "restaurant",             ["kfc", "kentucky fried"]),
+    ("Starbucks",     "cafe",                   ["starbucks"]),
+    ("Costa Coffee",  "cafe",                   ["costa coffee", "costa"]),
+    ("Greggs",        "bakery",                 ["greggs"]),
+    ("Poundland",     "store",                  ["poundland"]),
+    ("Savers",        "store",                  ["savers health"]),
+    ("Boots",         "pharmacy",               ["boots pharmacy"]),
+    ("Tesco Express", "grocery_or_supermarket", ["tesco express", "tesco"]),
+    ("Co-op",         "grocery_or_supermarket", ["co-op", "coop", "cooperative"]),
+    ("Drive-Through", "restaurant",             ["drive-through", "drive through", "drive thru"]),
+]
+
+
+def geocode_uk_address(address: str) -> tuple:
+    """
+    Geocode a UK address to (lat, lon).
+    
+    Strategy:
+    1. Extract postcode from address → query postcodes.io (free, no key, very fast)
+    2. If no postcode: use Google Geocoding API (requires GOOGLE_MAPS_API_KEY)
+    3. If neither works: return (None, None)
+    """
+    # Strategy 1: postcodes.io (completely free, no API key)
+    pc_match = re.search(
+        r"\b([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})\b",
+        address, re.I
+    )
+    if pc_match:
+        _pc = re.sub(r"\s+", "", pc_match.group(1).upper())
+        try:
+            _r = requests.get(
+                f"https://api.postcodes.io/postcodes/{_pc}",
+                timeout=8, headers={"User-Agent": "MAPlanning/1.0"}
+            )
+            if _r.status_code == 200:
+                _d = _r.json().get("result", {})
+                if _d.get("latitude"):
+                    return float(_d["latitude"]), float(_d["longitude"])
+        except Exception:
+            pass
+
+    # Strategy 2: Google Geocoding API
+    _gmk = os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()
+    if _gmk:
+        try:
+            from urllib.parse import quote as _q
+            _r2 = requests.get(
+                f"https://maps.googleapis.com/maps/api/geocode/json"
+                f"?address={_q(address + ', UK')}&key={_gmk}",
+                timeout=10
+            )
+            if _r2.status_code == 200:
+                _res = _r2.json().get("results", [])
+                if _res:
+                    _loc = _res[0]["geometry"]["location"]
+                    return float(_loc["lat"]), float(_loc["lng"])
+        except Exception:
+            pass
+
+    return None, None
+
+
+def find_nearby_competitors(lat: float, lon: float, desc: str) -> list:
+    """
+    Search Google Places for existing retail competitors near an application.
+    Returns list of dicts: {name, address, type, distance_m, maps_url}
+    
+    Requires GOOGLE_MAPS_API_KEY. Without it, returns [] with a log message.
+    """
+    _gmk = os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()
+    if not _gmk:
+        log("  ℹ️  No GOOGLE_MAPS_API_KEY — competitor check requires Google Maps API", 2)
+        log("     Add secret GOOGLE_MAPS_API_KEY for automatic competitor detection", 2)
+        return []
+
+    desc_lower = desc.lower()
+    seen_ids   = set()
+    competitors = []
+
+    # Decide which place types to search based on what was proposed
+    types_to_search = set()
+    for _label, _ptype, _terms in _COMPETITOR_TYPES:
+        if any(t in desc_lower for t in _terms):
+            types_to_search.add((_label, _ptype))
+
+    # Always include generic retail types for food/retail applications
+    if any(w in desc_lower for w in ["food", "supermarket", "convenience", "grocery", "retail"]):
+        types_to_search.add(("Supermarket", "grocery_or_supermarket"))
+    if any(w in desc_lower for w in ["restaurant", "café", "cafe", "coffee", "takeaway", "hot food"]):
+        types_to_search.add(("Restaurant/Cafe", "restaurant"))
+        types_to_search.add(("Cafe", "cafe"))
+
+    if not types_to_search:
+        types_to_search = {("Retail", "store"), ("Supermarket", "grocery_or_supermarket")}
+
+    import math as _math
+    for _label, _ptype in types_to_search:
+        try:
+            _r = requests.get(
+                "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
+                params={
+                    "location": f"{lat},{lon}",
+                    "radius":   str(_COMPETITOR_RADIUS_M),
+                    "type":     _ptype,
+                    "key":      _gmk,
+                    "language": "en",
+                },
+                timeout=12
+            )
+            if _r.status_code != 200:
+                continue
+            for _pl in _r.json().get("results", []):
+                _pid = _pl.get("place_id", "")
+                if not _pid or _pid in seen_ids:
+                    continue
+                seen_ids.add(_pid)
+                _loc  = _pl.get("geometry", {}).get("location", {})
+                _plat, _plon = float(_loc.get("lat", lat)), float(_loc.get("lng", lon))
+                # Haversine distance
+                _dlat = _math.radians(_plat - lat)
+                _dlon = _math.radians(_plon - lon)
+                _a    = (_math.sin(_dlat/2)**2 +
+                         _math.cos(_math.radians(lat)) *
+                         _math.cos(_math.radians(_plat)) *
+                         _math.sin(_dlon/2)**2)
+                _dist = int(6371000 * 2 * _math.asin(_math.sqrt(min(1.0,_a))))
+                competitors.append({
+                    "name":       _pl.get("name", ""),
+                    "address":    _pl.get("vicinity", ""),
+                    "type":       _label,
+                    "distance_m": _dist,
+                    "maps_url":   f"https://www.google.com/maps/place/?q=place_id:{_pid}",
+                })
+            time.sleep(0.25)
+        except Exception as _pe:
+            log(f"  ⚠️  Places ({_label}): {_pe}", 2)
+
+    # Sort by distance, deduplicate by name
+    seen_names = set()
+    unique = []
+    for c in sorted(competitors, key=lambda x: x["distance_m"]):
+        _k = c["name"].lower()
+        if _k not in seen_names:
+            seen_names.add(_k)
+            unique.append(c)
+
+    return unique[:10]
+
+
+def draft_ai_objection(lead: dict, competitors: list) -> str:
+    """
+    Draft a formal planning objection using AI.
+    
+    SUPPORTED AI PROVIDERS (checked in order):
+    1. OpenAI     → set OPENAI_API_KEY   (Mark has paid credits here)
+    2. Anthropic  → set ANTHROPIC_API_KEY (Claude, alternative)
+    3. No key set → returns a structured template with placeholders
+    
+    The objection covers:
+    - NPPF 2024 Chapter 7, paras 88-91 (town centre sequential test)
+    - Retail Impact Assessment requirement
+    - Lack of evidence failure
+    - Specific competitor context
+    """
+    _comp_lines = "\n".join(
+        f"  • {c['name']} ({c['type']}) — {c['distance_m']}m away at {c['address']}"
+        for c in competitors[:6]
+    ) if competitors else "  (No competitors identified in proximity search)"
+
+    _prompt = f"""You are a specialist UK retail planning consultant at MAPlanning (Mark Alexander Planning).
+Draft a formal planning objection letter (550-750 words) on behalf of an existing nearby retailer
+who is potentially impacted by this new planning application.
+
+PLANNING APPLICATION DETAILS:
+  Council:      {lead.get('council', '')}
+  Reference:    {lead.get('ref', '')}
+  Address:      {lead.get('addr', '')}
+  Proposal:     {lead.get('desc', '')}
+  Application type: {lead.get('app_type', 'Full planning application')}
+  Applicant:    {lead.get('applicant', 'Not stated')}
+
+EXISTING NEARBY OPERATORS (potential clients for MAPlanning's objection service):
+{_comp_lines}
+
+The objection MUST cover all four of these grounds:
+
+1. SEQUENTIAL TEST (NPPF paras 88-90, 2024):
+   The applicant has not demonstrated adequate sequential search. The sequential approach
+   requires proposals for main town centre uses in out-of-centre locations to first consider
+   sequentially preferable in-centre and edge-of-centre sites. Without a robust Sequential
+   Test Assessment, permission should be refused.
+
+2. RETAIL IMPACT ASSESSMENT (NPPF para 91, 2024):
+   For retail proposals exceeding the locally-defined impact threshold, a Retail Impact
+   Assessment is required. The application does not appear to be accompanied by a sufficient
+   assessment of impact on the vitality and viability of existing centres.
+
+3. LACK OF EVIDENCE:
+   The application is deficient in evidence: no quantitative or qualitative need has been
+   demonstrated; no sequential search submitted; no impact assessment provided. These are
+   specific, curable reasons for refusal under the NPPF.
+
+4. HARM TO VITALITY AND VIABILITY:
+   The proposal would divert trade from established town centre and local retailers, harming
+   vitality and viability in conflict with NPPF Chapter 7 objectives.
+
+FORMAT: Start "Dear Sir/Madam," and end "Yours faithfully,\\n[Client Name]\\nOn behalf of [existing operator]"
+Cite specific NPPF 2024 paragraph numbers. Use formal planning consultancy language.
+Return ONLY the letter. No preamble or explanation."""
+
+    # ── Try OpenAI first (Mark has paid credits) ──────────────────────────────
+    _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if _openai_key:
+        try:
+            _r = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {_openai_key}",
+                    "Content-Type":  "application/json",
+                },
+                json={
+                    "model":       "gpt-4o-mini",  # fast + cheap; upgrade to gpt-4o for higher quality
+                    "max_tokens":  1200,
+                    "temperature": 0.3,            # low temp = consistent, formal tone
+                    "messages":    [{"role": "user", "content": _prompt}],
+                },
+                timeout=40
+            )
+            if _r.status_code == 200:
+                _text = _r.json()["choices"][0]["message"]["content"].strip()
+                log(f"  ✅ OpenAI objection draft ({len(_text)} chars, model: gpt-4o-mini)", 2)
+                return _text
+            else:
+                log(f"  ⚠️  OpenAI API {_r.status_code} — trying Anthropic fallback", 2)
+        except Exception as _oae:
+            log(f"  ⚠️  OpenAI error: {_oae} — trying Anthropic fallback", 2)
+
+    # ── Try Anthropic Claude (fallback) ───────────────────────────────────────
+    _anth_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if _anth_key:
+        try:
+            _r2 = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key":         _anth_key,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type":      "application/json",
+                },
+                json={
+                    "model":      "claude-haiku-4-5-20251001",  # fast + affordable
+                    "max_tokens": 1200,
+                    "messages":   [{"role": "user", "content": _prompt}],
+                },
+                timeout=40
+            )
+            if _r2.status_code == 200:
+                _text2 = _r2.json()["content"][0]["text"].strip()
+                log(f"  ✅ Claude objection draft ({len(_text2)} chars)", 2)
+                return _text2
+            else:
+                log(f"  ⚠️  Anthropic API {_r2.status_code}", 2)
+        except Exception as _ae:
+            log(f"  ⚠️  Anthropic error: {_ae}", 2)
+
+    # ── No AI key: return structured template ─────────────────────────────────
+    log("  ℹ️  No OPENAI_API_KEY or ANTHROPIC_API_KEY set — using template objection", 2)
+    log("     Add OPENAI_API_KEY secret to GitHub for AI-generated objections", 2)
+    _comp_summary = (
+        ", ".join(f"{c['name']} ({c['distance_m']}m)" for c in competitors[:3])
+        if competitors else "existing operators in the area"
+    )
+    return f"""Dear Sir/Madam,
+
+RE: Planning Application {lead.get('ref', '[REFERENCE]')} — {lead.get('addr', '[ADDRESS]')}
+    {lead.get('desc', '[PROPOSAL]')}
+
+I write on behalf of {_comp_summary} to object to the above application on the following grounds:
+
+1. FAILURE OF SEQUENTIAL TEST (NPPF 2024, paragraphs 88-90)
+The application does not demonstrate that a sequential assessment has been undertaken. 
+NPPF paragraph 89 requires applicants for main town centre uses in out-of-centre locations 
+to demonstrate that there are no sequentially preferable sites available. In the absence 
+of a Sequential Test Assessment, the application should be refused.
+
+2. ABSENCE OF RETAIL IMPACT ASSESSMENT (NPPF 2024, paragraph 91)
+No Retail Impact Assessment accompanies this application. Where proposals for retail uses 
+exceed the locally set threshold, a Retail Impact Assessment is required to demonstrate 
+no unacceptable impact on the vitality and viability of existing centres.
+
+3. HARM TO VITALITY AND VIABILITY
+The proposed development would divert expenditure from established retailers and centres 
+in conflict with the NPPF's objective (Chapter 7) of supporting the vitality and viability 
+of existing town centres.
+
+4. LACK OF EVIDENCE
+The application lacks sufficient evidence to demonstrate compliance with the NPPF sequential 
+approach and impact requirements. Failure to demonstrate compliance constitutes grounds for refusal.
+
+We respectfully request that the Local Planning Authority refuse this application.
+
+Yours faithfully,
+[Client Name]
+On behalf of [Existing Operator]
+Prepared by MAPlanning — Retail Planning Consultants"""
+
+
+def _get_or_create_new_apps_tab(spreadsheet):
+    """Get or create the 'New Applications' tab for the competitor alert system."""
+    _TAB = "New Applications"
+    try:
+        return spreadsheet.worksheet(_TAB)
+    except Exception:
+        ws = spreadsheet.add_worksheet(_TAB, rows=2000, cols=11)
+        ws.update(values=[[
+            "Council", "Reference", "Address", "Proposal", "Applicant",
+            "Date Received", "Competitor Count", "Competitors (name + distance)",
+            "AI Objection Draft (preview)", "Objection Quality", "Status",
+        ]], range_name="A1")
+        try:
+            ws.spreadsheet.batch_update({"requests": [{
+                "repeatCell": {
+                    "range": {"sheetId": ws.id, "startRowIndex": 0, "endRowIndex": 1},
+                    "cell": {"userEnteredFormat": {
+                        "backgroundColor": {"red": 0.067, "green": 0.302, "blue": 0.455},
+                        "textFormat": {
+                            "foregroundColor": {"red":1,"green":1,"blue":1},
+                            "bold": True,
+                        },
+                    }},
+                    "fields": "userEnteredFormat(backgroundColor,textFormat)",
+                }
+            }]})
+        except Exception:
+            pass
+        return ws
+
+
+def write_new_application(lead: dict, ws_tab) -> bool:
+    """Write a new (pending) application + competitor data to the New Applications tab."""
+    _comp_str = " | ".join(
+        f"{c['name']} ({c['distance_m']}m)"
+        for c in lead.get("competitors", [])[:5]
+    ) or "None found"
+
+    _objection = lead.get("ai_objection", "")
+    _preview   = (_objection[:400] + "…") if len(_objection) > 400 else _objection
+
+    # Quality rating based on competitor count and objection length
+    _comp_count = len(lead.get("competitors", []))
+    if _comp_count >= 3 and len(_objection) > 500:
+        _quality = "HIGH — multiple competitors + AI draft ready"
+    elif _comp_count >= 1 and _objection:
+        _quality = "MEDIUM — competitor found, review draft"
+    elif _comp_count >= 1:
+        _quality = "LOW — competitor found, no AI draft (add API key)"
+    else:
+        _quality = "INFO — application found, no competitors detected"
+
+    try:
+        sheets_retry(lambda: ws_tab.append_row([
+            lead.get("council",""),
+            lead.get("ref",""),
+            lead.get("addr","")[:200],
+            lead.get("desc","")[:300],
+            lead.get("applicant",""),
+            lead.get("date_rec",""),
+            str(_comp_count),
+            _comp_str,
+            _preview,
+            _quality,
+            "REVIEW",
+        ], value_input_option="USER_ENTERED"))
+        return True
+    except Exception as _e:
+        log(f"  ❌ New app write failed: {_e}", 2)
+        return False
+
+
+def process_new_application(sess, base_url, council, item) -> dict | None:
+    """
+    Process a planning application still in progress (not yet decided).
+    
+    Checks for nearby competitors and drafts an AI objection if found.
+    This is the engine for Mark's competitor alert idea.
+    
+    Returns lead dict (with competitors + ai_objection fields) or None if not relevant.
+    """
+    kv  = item["keyVal"]
+    ref = item["ref"]
+
+    # Must be a relevant retail/Class E use
+    desc_lower = item["desc"].lower()
+    if not any(kw.lower() in desc_lower for kw in RETAIL_KEYWORDS[:15]):
+        return None
+
+    # Skip excluded types
+    if any(ex.lower() in desc_lower for ex in EXCLUDE_WORDS):
+        return None
+
+    det = get_details(sess, base_url, kv)
+
+    # Only undecided applications
+    decision_raw = (det.get("decision","") or "").lower().strip()
+    _decided = ["granted","approved","refused","dismissed","withdrawn","invalid",
+                "not required","permitted development"]
+    if decision_raw and any(w in decision_raw for w in _decided):
+        return None
+
+    addr = det.get("address", item["addr"])
+    desc = det.get("proposal",  item["desc"])
+
+    log(f"  🔍 New app {ref}: geocoding + competitor check", 2)
+    lat, lon = geocode_uk_address(addr)
+    if lat:
+        log(f"  📍 {lat:.4f}, {lon:.4f}", 2)
+    else:
+        log(f"  ⚠️  Could not geocode '{addr[:50]}' — competitor search skipped", 2)
+
+    competitors = find_nearby_competitors(lat, lon, desc) if lat else []
+    if competitors:
+        log(f"  🎯 {len(competitors)} competitors within {_COMPETITOR_RADIUS_M}m", 2)
+        for c in competitors[:3]:
+            log(f"     • {c['name']}: {c['distance_m']}m", 2)
+
+    _lead = {
+        "council":      council,
+        "ref":          ref,
+        "addr":         addr,
+        "desc":         desc,
+        "app_type":     det.get("app_type",""),
+        "applicant":    det.get("applicant",""),
+        "date_rec":     det.get("date_rec",""),
+        "url":          f"{base_url}/applicationDetails.do?activeTab=summary&keyVal={kv}",
+        "competitors":  competitors,
+        "ai_objection": "",
+    }
+
+    # Only draft objection when competitors are actually found nearby
+    if competitors:
+        _lead["ai_objection"] = draft_ai_objection(_lead, competitors)
+
+    return _lead
+
 def run():
     run_start = datetime.now()
     today     = datetime.now()
@@ -2721,11 +3138,13 @@ def run():
     date_from = (today - timedelta(weeks=WEEKS_TO_SCRAPE)).strftime("%d/%m/%Y")
 
     print("=" * 60)
-    print(f"🏗️  MAPlanning Retail Lead Engine v20")
+    print(f"🏗️  MAPlanning Retail Lead Engine v21")
     print(f"📅  {today.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"📆  {date_from} → {date_to}  ({WEEKS_TO_SCRAPE} weeks)")
     print(f"🏛️  {len(COUNCILS)} councils configured")
-    print(f"🔎  {', '.join(RETAIL_KEYWORDS)}")
+    print(f"🔎  Mode: {RUN_MODE} | Keywords: {len(RETAIL_KEYWORDS)}")
+    print(f"🤖  AI: {'OpenAI ✅' if os.environ.get('OPENAI_API_KEY') else 'Anthropic ✅' if os.environ.get('ANTHROPIC_API_KEY') else '⚠️ No AI key (add OPENAI_API_KEY)'}")
+    print(f"🗺️  Maps: {'Google Places ✅' if os.environ.get('GOOGLE_MAPS_API_KEY') else '⚠️ No GOOGLE_MAPS_API_KEY (competitor check disabled)'}")
     print("=" * 60)
 
     # ── Step 1: connect to Sheets & load existing refs ──────
@@ -2756,6 +3175,10 @@ def run():
     total   = len(live_councils)
 
     for idx, (name, url) in enumerate(live_councils.items()):
+        if not time_ok(need_s=90):
+            log(f"\n⏰ Runtime budget low — stopping after {idx}/{total} councils")
+            log(f"   ({total-idx} councils skipped: {', '.join(list(live_councils.keys())[idx:idx+5])}…)")
+            break
         log(f"\n{'━'*60}")
         log(f"Council {idx+1}/{total}: {name}")
         log(f"{'━'*60}")
@@ -2774,6 +3197,56 @@ def run():
             time.sleep(pause)
 
     grand.sort(key=lambda x: x["score"], reverse=True)
+
+    # ── NEW APPLICATIONS MODE — Mark's competitor alert system ────────────────
+    _new_app_count = 0
+    if RUN_MODE in ("applications", "both"):
+        log(f"\n{'━'*60}")
+        log("🔍 COMPETITOR ALERT MODE — scanning new/pending applications")
+        log(f"{'━'*60}")
+
+        # Get or create the New Applications sheet tab
+        _ws_new = None
+        try:
+            _sh = get_sheet()
+            if _sh:
+                _ws_new = _get_or_create_new_apps_tab(_sh.spreadsheet)
+        except Exception as _te:
+            log(f"  ⚠️  New Applications tab: {_te}")
+
+        # Scan each live council for new applications
+        for _nc_name, _nc_url in live_councils.items():
+            if not time_ok(need_s=45):
+                log("⏰ Time budget low — stopping competitor scan"); break
+            try:
+                _nsess = new_session()
+                _warmup_portal_session(_nsess, _nc_url)
+                for _kw in RETAIL_KEYWORDS[:10]:  # top 10 keywords
+                    try:
+                        _items = search_one_keyword(
+                            _nsess, _nc_url, _kw, date_from, date_to)
+                        for _item in _items[:3]:  # max 3 per keyword per council
+                            if _item["ref"] in _existing_refs:
+                                continue
+                            _nl = process_new_application(
+                                _nsess, _nc_url, _nc_name, _item)
+                            if _nl:
+                                if _ws_new:
+                                    write_new_application(_nl, _ws_new)
+                                _new_app_count += 1
+                                if _nl.get("competitors"):
+                                    log(f"  🎯 {_item['ref']}: "
+                                        f"{len(_nl['competitors'])} competitors nearby")
+                        time.sleep(0.8)
+                    except Exception:
+                        continue
+            except Exception as _nce:
+                log(f"  ⚠️  {_nc_name} (new apps): {str(_nce)[:60]}")
+
+        if _new_app_count > 0:
+            log(f"\n  📊 {_new_app_count} new applications processed → 'New Applications' tab")
+        else:
+            log(f"  📊 No relevant new applications found this scan")
 
     run_duration_min = (datetime.now() - run_start).total_seconds() / 60
 
