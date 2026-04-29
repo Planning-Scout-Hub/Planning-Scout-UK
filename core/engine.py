@@ -2842,7 +2842,7 @@ def draft_ai_objection(lead: dict, competitors: list) -> str:
     Draft a formal planning objection using AI.
     
     SUPPORTED AI PROVIDERS (checked in order):
-    1. OpenAI     → set OPENAI_API_KEY   (Inger has paid credits here)
+    1. OpenAI     → set OPENAI_API_KEY   (Mark has paid credits here)
     2. Anthropic  → set ANTHROPIC_API_KEY (Claude, alternative)
     3. No key set → returns a structured template with placeholders
     
@@ -2909,7 +2909,7 @@ Return ONLY the letter. No preamble or explanation."""
                     "Content-Type":  "application/json",
                 },
                 json={
-                    "model":       "gpt-4o",  # fast + cheap; upgrade to gpt-4o for higher quality
+                    "model":       "gpt-4o-mini",  # fast + cheap; upgrade to gpt-4o for higher quality
                     "max_tokens":  1200,
                     "temperature": 0.3,            # low temp = consistent, formal tone
                     "messages":    [{"role": "user", "content": _prompt}],
@@ -2918,7 +2918,7 @@ Return ONLY the letter. No preamble or explanation."""
             )
             if _r.status_code == 200:
                 _text = _r.json()["choices"][0]["message"]["content"].strip()
-                log(f"  ✅ OpenAI objection draft ({len(_text)} chars, model: gpt-4o)", 2)
+                log(f"  ✅ OpenAI objection draft ({len(_text)} chars, model: gpt-4o-mini)", 2)
                 return _text
             else:
                 log(f"  ⚠️  OpenAI API {_r.status_code} — trying Anthropic fallback", 2)
