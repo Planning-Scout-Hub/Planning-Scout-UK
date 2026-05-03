@@ -22,29 +22,40 @@ CLIENT_CONFIG = {
     "sheet_id":             "172bpv-b2_nK5ENE1XPk5rWeokvnr1sjHvLBfVzHWh6c",
     "email_to_secret_name": "GMAIL_TO_MAPLANNING",
     "client_type":          "retail",
-    "min_lead_score":       55,  # Lowered from 60 — more winnable appeals
+    "min_lead_score":       50,  # 50 = base(40) + any signal(>=10) qualifies
     "preferred_documents":  ["Decision Notice"],
 
     "search_keywords": [
-        # Primary retail / Class E terms
-        "Class E", "use class e", "change of use",
-        "retail", "shop", "shopping",
-        "supermarket", "convenience store", "food store", "discount store",
-        "food and drink", "hot food takeaway", "takeaway", "hot food",
+        # Primary Class E / change of use (Mark's core targets)
+        "Class E", "use class e", "to use class e", "change of use",
+        # Retail / Convenience — with "to X" variants
+        "to retail", "retail",
+        "to shop", "shop",
+        "to supermarket", "supermarket",
+        "to convenience", "convenience store",
+        "to food store", "food store",
+        "discount store",
+        "to comparison", "comparison retail",
         # Food & Beverage
-        "restaurant", "cafe", "café", "coffee shop", "fast food",
-        "drive-through", "drive through", "drive thru", "qsr",
-        # Health & Personal Services  
-        "gym", "fitness", "health club", "leisure centre",
-        "hair salon", "hair", "beauty salon", "beauty", "nail", "barber",
-        "health centre", "clinic", "pharmacy", "optician",
-        # Commercial
-        "office", "workspace", "co-working", "sui generis",
-        "betting shop", "betting", "amusement", "car wash",
-        "mixed use", "commercial",
-        # Sequential test–specific (catches refusals that use policy language)
-        "sequential", "town centre", "out of centre", "edge of centre",
-        "retail impact", "vitality", "viability",
+        "to restaurant", "restaurant",
+        "to cafe", "cafe", "cafe",
+        "to café", "café",
+        "coffee shop",
+        "to hot food", "hot food",
+        "to takeaway", "takeaway",
+        "food and drink",
+        "drive-through", "drive through",
+        # Health / Leisure / Personal Services
+        "to gym", "gym", "fitness",
+        "health centre",
+        "to clinic", "clinic",
+        "to pharmacy", "pharmacy",
+        "beauty salon", "hair salon",
+        # Other Class E / Sui Generis
+        "to office", "office",
+        "betting shop", "amusement", "car wash", "sui generis",
+        # Policy language appearing in application descriptions
+        "out of centre", "out-of-centre", "retail impact",
     ],
 
     "pdf_triggers": [
@@ -124,7 +135,7 @@ CLIENT_TYPE     = CLIENT_CONFIG.get("client_type", "retail")
 #   python engine_ma.py --weeks 2              (default: find refusals, 2-week window)
 #   python engine_ma.py --weeks 4 --mode both  (refusals + competitor alerts)
 #   python engine_ma.py --mode applications    (only competitor alerts)
-parser = argparse.ArgumentParser(description="MAPlanning Retail Lead Engine v24")
+parser = argparse.ArgumentParser(description="MAPlanning Retail Lead Engine v25")
 parser.add_argument("--weeks", type=int, default=2,
                     help="Weeks of applications to scan (default 2)")
 parser.add_argument("--mode",  type=str, default="decisions",
@@ -431,6 +442,7 @@ HEADERS_HTTP = {
 # When a council returns HTTP 429, record when the ban expires.
 _rate_limited_until = {}   # base_url -> datetime when ban expires
 _429_count = {}            # base_url -> consecutive 429 count (reset on success)
+_disclaimer_blocked = {}   # host -> True when disclaimer permanently blocks this session
 
 # ── Councils that need longer inter-request delays ────────────────────────────
 # Cornwall and a few large unitaries aggressively rate-limit cloud IPs.
@@ -890,6 +902,17 @@ def _score_retail(desc, triggers):
     s  = 40
     d  = desc.lower()
     tw = " ".join(triggers).lower()
+
+    # NPPF / planning policy signals — +8 per group when found in decision notice
+    # nppf alone in a refusal = the refusal cites national retail policy = relevant lead
+    if any(w in tw for w in ("nppf","national planning policy framework",
+                              "paragraph 91","paragraph 88","paragraph 89","paragraph 90",
+                              "planning policy","local plan","retail policy","development plan")):
+        s += 8
+    if any(w in tw for w in ("primary shopping area","main town centre use",
+                              "primary frontage","secondary frontage",
+                              "defined town centre","town centre first")):
+        s += 8
 
     # Evidence failure family — most winnable refusal type
     _evidence_phrases = (
@@ -1430,6 +1453,7 @@ def lookup_companies_house(name):
         r'(ltd|limited|plc|llp|llc|group|holdings|properties|developments?|'
         r'architects?|associates?|consulting|consultants?|design|enterprises?|'
         r'investments?|ventures?|solutions?|services?|uk)\b',
+        "", name, flags=re.I
     ).strip(" .,")
     if len(clean) < 3:
         clean = name
@@ -1663,17 +1687,37 @@ Be direct and commercially useful. No padding."""
 # results. This function detects and bypasses that gate.
 # ════════════════════════════════════════════════════════════
 def _is_disclaimer_page(html):
-    """True if the page is an Idox disclaimer/T&C gate rather than a search form."""
-    tl = html.lower()
-    has_disclaimer = any(kw in tl for kw in (
-        "disclaimer", "terms and conditions", "i accept", "agree to the terms",
-        "before you continue", "acceptedterms", "disclaimeraccept",
-    ))
-    has_search_form = bool(re.search(
-        r'name=["\'](?:description|searchCriteria|caseDecision|keyWord)', tl
-    ))
-    return has_disclaimer and not has_search_form
+    """
+    True ONLY if this is a BLOCKING Idox T&C gate.
 
+    CRITICAL FIX: Idox search form fields are named "searchCriteria.description"
+    and "searchCriteria.caseDecision". The old regex required the value to start
+    with bare field names (e.g. "description") but they actually start with
+    "searchCriteria." so has_search_form was always False, falsely flagging
+    every search page as a disclaimer gate and blocking all searches.
+    """
+    tl = html.lower()
+    # Detect search form fields — any of these = not a blocking disclaimer gate
+    _form_signals = (
+        "searchcriteria.description",
+        "searchcriteria.casedecision",
+        "applicationdecisionstart",
+        "applicationdecisionend",
+        "name=\"searchtype\"",
+        "action=\"advanced\"",
+    )
+    if any(sig in tl for sig in _form_signals):
+        return False  # has search form = definitely not a blocking gate
+    # Hard gate indicators (only on actual T&C blocking pages)
+    has_gate = any(kw in tl for kw in (
+        "disclaimeraccept", "acceptedterms", "accept and continue",
+        "you must accept the terms", "before you can search",
+    ))
+    has_weak = any(kw in tl for kw in (
+        "terms and conditions", "agree to the terms",
+        "before you continue", "i accept",
+    ))
+    return has_gate or (has_weak and "acceptedterms" in tl)
 def _accept_disclaimer(sess, base_url, html, current_url):
     """
     POST to accept the Idox disclaimer gate, unlocking the session for searches.
@@ -1929,21 +1973,26 @@ def _do_post(sess, base_url, keyword, date_from, date_to, with_refused=True):
         log(f"  ❌ Search page HTTP {r.status_code if r else 'no response'}", 1)
         return [], None
 
-    # ── Disclaimer gate: if portal redirected to T&C page, accept and retry ──
+    # ── Disclaimer gate: detect, accept once, block if persistently fails ───
+    _host_key = base_url.split("/online-applications")[0].rstrip("/")
+    if _disclaimer_blocked.get(_host_key):
+        return [], None  # already confirmed blocked this session — skip silently
+
     if _is_disclaimer_page(r.text):
-        log(f"  📋 Disclaimer gate detected — accepting automatically", 1)
-        accepted = _accept_disclaimer(sess, base_url, r.text, r.url)
-        if accepted:
-            time.sleep(1)
+        log(f"  📋 Disclaimer gate — accepting automatically", 1)
+        ok = _accept_disclaimer(sess, base_url, r.text, r.url)
+        if ok:
+            time.sleep(1.5)
             r = safe_get(sess, search_url, timeout=25)
-            if not r or r.status_code != 200:
-                log(f"  ❌ Search page still unavailable after disclaimer accept", 1)
-                return [], None
-            if _is_disclaimer_page(r.text):
-                log(f"  ❌ Still on disclaimer page after accept — portal blocked", 1)
+            if r and r.status_code == 200 and not _is_disclaimer_page(r.text):
+                _disclaimer_blocked.pop(_host_key, None)  # cleared OK
+            else:
+                log(f"  ❌ Disclaimer persists — blocking portal for this session", 1)
+                _disclaimer_blocked[_host_key] = True
                 return [], None
         else:
-            log(f"  ❌ Disclaimer accept failed", 1)
+            log(f"  ❌ Disclaimer accept failed — blocking portal for this session", 1)
+            _disclaimer_blocked[_host_key] = True
             return [], None
 
     form = read_form(r.text, base_url)
@@ -2140,12 +2189,36 @@ def collect_pages(sess, base_url, first_resp, keyword):
 
         if not items:
             if page_num == 1:
-                log(f"  ⚠️  0 results — title='{title}'", 1)
-                snippet = soup.get_text(separator=" ", strip=True)[:250]
-                log(f"  Page text: {snippet}", 1)
+                # If title looks like an application ref (e.g. "2026/0139/FUL | Change..."),
+                # the page HAS results but parse_results missed them.
+                # Try once more with a broader selector.
+                _title_is_app_ref = bool(re.search(r'\d{2,4}[./]\d{3,6}', title))
+                if _title_is_app_ref:
+                    # Broader pass: grab any link with keyVal= anywhere on the page
+                    _extra = []
+                    for _a in soup.find_all("a", href=True):
+                        _h = _a["href"]
+                        if "keyVal=" in _h:
+                            _kv = _h.split("keyVal=")[-1].split("&")[0]
+                            _desc = _a.get_text(strip=True)[:200]
+                            if _kv and _kv not in {i["keyVal"] for i in _extra}:
+                                _extra.append({
+                                    "keyVal": _kv, "ref": _kv,
+                                    "desc": _desc, "addr": "", "keyword": keyword,
+                                })
+                    if _extra:
+                        items = _extra
+                        log(f"  📄 Page {page_num}: {len(items)} results (table fallback)", 1)
+                if not items:
+                    log(f"  ⚠️  0 results — title='{title}'", 1)
+                    snippet = soup.get_text(separator=" ", strip=True)[:250]
+                    log(f"  Page text: {snippet}", 1)
+                    break
             else:
                 log(f"  ✅ {len(all_items)} total across {page_num-1} pages", 1)
-            break
+                break
+            if not items:
+                break
 
         # Duplicate-page detection: if ALL keyVals on this page are ones
         # we have already seen, the server is cycling — stop immediately.
@@ -2835,6 +2908,26 @@ def process_app(sess, base_url, council, item):
     log(f"  📋 {ref}")
     log(f"  {item['desc'][:90]}")
 
+
+    # Hard exclusion: skip administrative application types before ANY portal hit
+    # Mark: DO NOT scrape Discharge of Condition, Prior Approval, Reserved Matters
+    _dl = item["desc"].lower()
+    _ADMIN = ("discharge of condition","discharge of planning condition",
+              "approval of details","approval of reserved matters",
+              "details reserved by condition","reserved matters",
+              "non-material amendment","minor material amendment",
+              "prior notification","prior approval",
+              "certificate of lawful","advertisement consent",
+              "listed building consent","tree preservation",
+              "hedgerow removal","screening opinion","scoping opinion",
+              "section 73 ","s73 ",)
+    if any(ex in _dl for ex in _ADMIN):
+        return None  # administrative — not a planning lead
+
+    # Must have at least one retail/Class E keyword in the description
+    if not any(kw.lower() in _dl for kw in RETAIL_KEYWORDS[:25]):
+        return None
+
     det = get_details(sess, base_url, kv)
 
     # Pre-filter 1: skip clearly non-refused decisions immediately
@@ -3504,7 +3597,7 @@ def run():
     date_from = (today - timedelta(weeks=WEEKS_TO_SCRAPE)).strftime("%d/%m/%Y")
 
     print("=" * 60)
-    print(f"🏗️  MAPlanning Retail Lead Engine v24")
+    print(f"🏗️  MAPlanning Retail Lead Engine v25")
     print(f"📅  {today.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"📆  {date_from} → {date_to}  ({WEEKS_TO_SCRAPE} weeks)")
     print(f"🏛️  {len(COUNCILS)} councils configured")
