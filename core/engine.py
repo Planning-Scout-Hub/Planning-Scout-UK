@@ -22,50 +22,62 @@ CLIENT_CONFIG = {
     "sheet_id":             "172bpv-b2_nK5ENE1XPk5rWeokvnr1sjHvLBfVzHWh6c",
     "email_to_secret_name": "GMAIL_TO_MAPLANNING",
     "client_type":          "retail",
-    "min_lead_score":       50,  # 50 = base(40) + any signal(>=10) qualifies
+    "min_lead_score":       60,  # Mark's threshold from maplanning.json
     "preferred_documents":  ["Decision Notice"],
 
+    # ── Mark's search keywords (from maplanning.json) + "to X" variants ────
+    # These go into the Idox description search field.
+    # "to X" variants catch change-of-use applications by their TARGET use.
+    # Pure policy terms (sequential, vitality) are NOT here — they're in
+    # pdf_triggers. Application descriptions don't use policy language.
     "search_keywords": [
-        # Primary Class E / change of use (Mark's core targets)
-        "Class E", "use class e", "to use class e", "change of use",
-        # Retail / Convenience — with "to X" variants
-        "to retail", "retail",
-        "to shop", "shop",
-        "to supermarket", "supermarket",
-        "to convenience", "convenience store",
-        "to food store", "food store",
+        # Primary Class E (Mark's exact terms from JSON)
+        "Class E", "change of use", "use class e",
+        # Retail
+        "shop", "to shop",
+        "retail", "to retail",
+        "supermarket", "to supermarket",
+        "convenience", "to convenience",
+        "food store", "to food store",
         "discount store",
-        "to comparison", "comparison retail",
-        # Food & Beverage
-        "to restaurant", "restaurant",
-        "to cafe", "cafe", "cafe",
-        "to café", "café",
+        "comparison retail", "to comparison",
+        # Food & Drink
+        "café", "cafe", "to café", "to cafe",
+        "restaurant", "to restaurant",
+        "hot food", "to hot food",
+        "takeaway", "to takeaway",
         "coffee shop",
-        "to hot food", "hot food",
-        "to takeaway", "takeaway",
         "food and drink",
         "drive-through", "drive through",
-        # Health / Leisure / Personal Services
-        "to gym", "gym", "fitness",
+        # Leisure / Health / Personal Services
+        "gym", "to gym",
+        "fitness",
+        "hair", "beauty", "nail", "barber",
         "health centre",
-        "to clinic", "clinic",
-        "to pharmacy", "pharmacy",
-        "beauty salon", "hair salon",
-        # Other Class E / Sui Generis
-        "to office", "office",
-        "betting shop", "amusement", "car wash", "sui generis",
-        # Policy language appearing in application descriptions
-        "out of centre", "out-of-centre", "retail impact",
+        "clinic", "to clinic",
+        "pharmacy", "to pharmacy",
+        "optician",
+        # Other Class E
+        "office", "to office",
+        "workspace",
+        # Sui Generis (Mark's JSON includes these)
+        "sui generis",
+        "betting",
+        "amusement",
+        "car wash",
+        "mixed use",
     ],
+
+    
 
     "pdf_triggers": [
         # Sequential test failures
         "out of centre", "out-of-centre", "outside the town centre",
         "outside a defined centre", "outside any defined centre",
-        "edge of centre", "edge-of-centre",
+        "edge of centre", "edge-of-centre", "edge of the town centre",
         "sequential", "sequential test", "sequential approach",
         "sequential assessment", "sequential preference", "sequential search",
-        "no sequential", "fails the sequential", "failed the sequential",
+        "no sequential", "fail the sequential", "fails the sequential", "failed the sequential",
         "sequentially preferable", "sequential step",
         # Evidence / assessment failures (strongest appeal grounds)
         "lack of evidence", "insufficient evidence", "no evidence",
@@ -135,7 +147,7 @@ CLIENT_TYPE     = CLIENT_CONFIG.get("client_type", "retail")
 #   python engine_ma.py --weeks 2              (default: find refusals, 2-week window)
 #   python engine_ma.py --weeks 4 --mode both  (refusals + competitor alerts)
 #   python engine_ma.py --mode applications    (only competitor alerts)
-parser = argparse.ArgumentParser(description="MAPlanning Retail Lead Engine v25")
+parser = argparse.ArgumentParser(description="MAPlanning Retail Lead Engine v26")
 parser.add_argument("--weeks", type=int, default=2,
                     help="Weeks of applications to scan (default 2)")
 parser.add_argument("--mode",  type=str, default="decisions",
@@ -2912,15 +2924,29 @@ def process_app(sess, base_url, council, item):
     # Hard exclusion: skip administrative application types before ANY portal hit
     # Mark: DO NOT scrape Discharge of Condition, Prior Approval, Reserved Matters
     _dl = item["desc"].lower()
-    _ADMIN = ("discharge of condition","discharge of planning condition",
-              "approval of details","approval of reserved matters",
-              "details reserved by condition","reserved matters",
-              "non-material amendment","minor material amendment",
-              "prior notification","prior approval",
-              "certificate of lawful","advertisement consent",
-              "listed building consent","tree preservation",
-              "hedgerow removal","screening opinion","scoping opinion",
-              "section 73 ","s73 ",)
+    # Mark's exclude_words from maplanning.json — skip these entirely
+    _ADMIN = (
+        "discharge of condition", "discharge of planning condition",
+        "reserved matters", "approval of details", "approval of reserved",
+        "details reserved by condition", "condition discharge",
+        "certificate of lawful",
+        "advertisement consent", "listed building consent",
+        "hedgerow removal",
+        "non-material amendment", "minor material amendment",
+        "section 73", "s73",
+        "screening opinion", "scoping opinion",
+        "environmental impact assessment screening",
+        "prior notification", "prior approval",
+        "class ma", "part 6", "part 7",
+        "notification under", "prior notification under",
+        "telecommunications", "street works", "temporary structure",
+        "hmo", "house in multiple occupation", "hostel",
+        "c4 use", "sui generis hmo",
+        "lawful development",
+        "tree preservation",
+        "single storey extension", "loft conversion", "porch",
+        "garage alteration",
+    )
     if any(ex in _dl for ex in _ADMIN):
         return None  # administrative — not a planning lead
 
@@ -2934,16 +2960,25 @@ def process_app(sess, base_url, council, item):
     decision_raw = det.get("decision", "").lower().strip()
     # Non-refusal decisions — skip immediately without hitting Documents tab
     _NON_REFUSAL = [
-        "granted", "approved", "permitted", "conditional grant",
-        "conditions discharged", "prior approval not required",
+        # Standard granted decisions
+        "granted", "grant permission", "grant planning permission",
+        "approved", "approval", "permitted", "permit",
+        "conditional grant", "conditional approval",
+        "grant subject to", "granted subject to",
+        "permission granted", "planning permission granted",
+        "granted conditionally", "granted with conditions",
+        # Administrative
+        "conditions discharged",
+        "prior approval not required",
         "prior approval required and approved",
-        "prior approval refused",       # prior approval ≠ planning refusal (different procedure)
+        "prior approval refused",   # prior approval ≠ s.78 planning refusal
         "not required", "withdrawn", "invalid", "void",
-        "non determined",               # non-determination = applicant appealed, not a refusal notice
+        "non determined",
         "no objection",
         "permission with legal agreement",
         "permission subject to",
         "application permitted",
+        "approve",  # some portals use bare 'Approve'
     ]
     
     if decision_raw:
@@ -3013,10 +3048,9 @@ def process_app(sess, base_url, council, item):
         "url":       f"{base_url}/applicationDetails.do?activeTab=summary&keyVal={kv}",
         "doc_url":   doc_url,
     }
-    # Sales intelligence enrichment
+    # Sales intelligence enrichment (safe in thread — no Sheets I/O)
     enrich_lead(lead)
-    enrich_lead(lead)  # safe in thread — no Sheets I/O
-    # write_lead is called sequentially AFTER all threads complete (thread-safe)
+    return lead   # ← CRITICAL: return the lead so _worker can collect it
 
 # ════════════════════════════════════════════════════════════
 # SCRAPE ONE COUNCIL
@@ -3597,7 +3631,7 @@ def run():
     date_from = (today - timedelta(weeks=WEEKS_TO_SCRAPE)).strftime("%d/%m/%Y")
 
     print("=" * 60)
-    print(f"🏗️  MAPlanning Retail Lead Engine v25")
+    print(f"🏗️  MAPlanning Retail Lead Engine v26")
     print(f"📅  {today.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"📆  {date_from} → {date_to}  ({WEEKS_TO_SCRAPE} weeks)")
     print(f"🏛️  {len(COUNCILS)} councils configured")
