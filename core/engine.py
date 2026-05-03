@@ -22,44 +22,74 @@ CLIENT_CONFIG = {
     "sheet_id":             "172bpv-b2_nK5ENE1XPk5rWeokvnr1sjHvLBfVzHWh6c",
     "email_to_secret_name": "GMAIL_TO_MAPLANNING",
     "client_type":          "retail",
-    "min_lead_score":       60,
+    "min_lead_score":       55,  # Lowered from 60 — more winnable appeals
     "preferred_documents":  ["Decision Notice"],
 
     "search_keywords": [
-        "Class E", "change of use", "use class e", "shop", "retail",
-        "supermarket", "convenience", "food store", "discount store",
-        "café", "cafe", "restaurant", "hot food", "takeaway",
-        "coffee shop", "gym", "fitness", "hair", "beauty", "nail",
-        "barber", "health centre", "clinic", "office", "workspace",
-        "sui generis", "betting", "amusement", "car wash", "mixed use",
-        "pharmacy", "optician", "drive-through", "drive through",
-        "food and drink",
+        # Primary retail / Class E terms
+        "Class E", "use class e", "change of use",
+        "retail", "shop", "shopping",
+        "supermarket", "convenience store", "food store", "discount store",
+        "food and drink", "hot food takeaway", "takeaway", "hot food",
+        # Food & Beverage
+        "restaurant", "cafe", "café", "coffee shop", "fast food",
+        "drive-through", "drive through", "drive thru", "qsr",
+        # Health & Personal Services  
+        "gym", "fitness", "health club", "leisure centre",
+        "hair salon", "hair", "beauty salon", "beauty", "nail", "barber",
+        "health centre", "clinic", "pharmacy", "optician",
+        # Commercial
+        "office", "workspace", "co-working", "sui generis",
+        "betting shop", "betting", "amusement", "car wash",
+        "mixed use", "commercial",
+        # Sequential test–specific (catches refusals that use policy language)
+        "sequential", "town centre", "out of centre", "edge of centre",
+        "retail impact", "vitality", "viability",
     ],
 
     "pdf_triggers": [
+        # Sequential test failures
         "out of centre", "out-of-centre", "outside the town centre",
-        "outside a defined centre", "edge of centre", "edge-of-centre",
-        "edge of the town centre", "sequential", "sequential test",
-        "sequential approach", "sequential assessment", "sequential preference",
-        "sequential search", "sequential step", "no sequential",
-        "fails the sequential", "failed the sequential", "fail the sequential",
-        "sequentially preferable", "lack of evidence", "insufficient evidence",
-        "no evidence", "lack of information", "insufficient information",
+        "outside a defined centre", "outside any defined centre",
+        "edge of centre", "edge-of-centre",
+        "sequential", "sequential test", "sequential approach",
+        "sequential assessment", "sequential preference", "sequential search",
+        "no sequential", "fails the sequential", "failed the sequential",
+        "sequentially preferable", "sequential step",
+        # Evidence / assessment failures (strongest appeal grounds)
+        "lack of evidence", "insufficient evidence", "no evidence",
+        "lack of information", "insufficient information",
         "failure to demonstrate", "failed to demonstrate",
         "fails to demonstrate", "not demonstrated", "has not demonstrated",
         "cannot demonstrate", "unable to demonstrate",
-        "no information provided", "no assessment", "has not been submitted",
-        "not been submitted", "not been provided", "has not been provided",
+        "no information provided", "no assessment",
+        "has not been submitted", "not been submitted",
+        "not been provided", "has not been provided",
         "was not submitted", "absence of", "in the absence of",
-        "retail impact assessment", "retail impact study",
+        # Retail impact assessment
+        "retail impact assessment", "retail impact study", "retail impact",
+        "impact assessment", "quantitative need assessment",
+        # Vitality / viability
         "harm to the vitality and viability", "harm to the vitality",
         "adverse impact on the vitality", "undermine the vitality",
-        "prejudice the vitality", "no identified need", "no quantitative need",
-        "no qualitative need", "need has not been",
-        "need has not been demonstrated", "no overriding need",
-        "need not been established", "unmet need", "no need has been",
+        "prejudice the vitality", "vitality and viability",
+        "health of the town centre",
+        # Need
+        "no identified need", "no quantitative need", "no qualitative need",
+        "need has not been", "need has not been demonstrated",
+        "no overriding need", "need not been established",
+        "unmet need", "no need has been",
+        # Justification
         "insufficient justification", "failed to justify",
-        "fails to justify", "not justified",
+        "fails to justify", "not justified", "unjustified",
+        # NPPF chapter 7 specific
+        "nppf", "national planning policy framework",
+        "paragraph 91", "paragraph 88", "paragraph 89", "paragraph 90",
+        "main town centre use", "primary shopping area",
+        "defined town centre", "primary frontage", "secondary frontage",
+        # Council policy
+        "retail policy", "town centre policy", "out of centre policy",
+        "local plan policy", "development plan policy",
     ],
 
     "exclude_words": [
@@ -94,7 +124,7 @@ CLIENT_TYPE     = CLIENT_CONFIG.get("client_type", "retail")
 #   python engine_ma.py --weeks 2              (default: find refusals, 2-week window)
 #   python engine_ma.py --weeks 4 --mode both  (refusals + competitor alerts)
 #   python engine_ma.py --mode applications    (only competitor alerts)
-parser = argparse.ArgumentParser(description="MAPlanning Retail Lead Engine v21")
+parser = argparse.ArgumentParser(description="MAPlanning Retail Lead Engine v24")
 parser.add_argument("--weeks", type=int, default=2,
                     help="Weeks of applications to scan (default 2)")
 parser.add_argument("--mode",  type=str, default="decisions",
@@ -172,7 +202,6 @@ COUNCILS = {
     "Redcar":            "https://planning.redcar-cleveland.gov.uk/online-applications",
     "Newcastle":         "https://publicaccess.newcastle.gov.uk/online-applications/",
     "Gateshead":         "https://public.gateshead.gov.uk/online-applications/",
-    "Sunderland":        "https://www.sunderland.gov.uk/online-applications/",
 
     # ══ North West ══════════════════════════════════════════════
     "Knowsley":          "https://publicaccess.knowsley.gov.uk/online-applications",
@@ -211,6 +240,10 @@ COUNCILS = {
     "Walsall":           "https://planningonline.walsall.gov.uk/online-applications",
     "Dudley":            "https://www.dudley.gov.uk/online-applications",
 
+
+    # ══ South East (additional) ════════════════════════════════
+    "Milton Keynes":     "https://publicaccess.milton-keynes.gov.uk/online-applications",
+    "Slough":            "https://digital.slough.gov.uk/online-applications",
     # ══ South West ══════════════════════════════════════════════
     "Bristol":           "https://planningonline.bristol.gov.uk/online-applications",
     "Plymouth":          "https://planning.plymouth.gov.uk/online-applications",
@@ -294,8 +327,6 @@ COUNCILS = {
     "Huntingdonshire":   "https://publicaccess.huntingdonshire.gov.uk/online-applications",
 
     # ══ North East ══════════════════════════════════════════════
-    "Newcastle":         "https://publicaccess.newcastle.gov.uk/online-applications",
-    "Gateshead":         "https://planning.gateshead.gov.uk/online-applications",
 
     # ══ West Midlands (additions) ════════════════════════════════════
     "Sandwell":          "https://webcaps.sandwell.gov.uk/publicaccess/",
@@ -399,14 +430,23 @@ HEADERS_HTTP = {
 # ── Per-council rate limit tracker ───────────────────────────────────────────
 # When a council returns HTTP 429, record when the ban expires.
 _rate_limited_until = {}   # base_url -> datetime when ban expires
+_429_count = {}            # base_url -> consecutive 429 count (reset on success)
 
 # ── Councils that need longer inter-request delays ────────────────────────────
 # Cornwall and a few large unitaries aggressively rate-limit cloud IPs.
 # Adding them here doubles the sleep between keyword requests for that council.
+# Councils with known disclaimer gate issues (non-standard cookie acceptance)
+# These need extra warmup time and cookie injection
+_DISCLAIMER_GATE_COUNCILS = {
+    "surrey heath", "west suffolk", "wigan", "basingstoke",
+}
+
 SLOW_COUNCILS = {
-    "https://planning.cornwall.gov.uk/online-applications",
-    "https://www.eastriding.gov.uk/online-applications",
-    "https://eplanning.birmingham.gov.uk/online-applications",
+    # URL → inter-keyword sleep seconds (default 1.0 elsewhere)
+    "https://planning.stockport.gov.uk/PlanningData-live/":  5.0,
+    "https://planning.cornwall.gov.uk/online-applications":  3.0,
+    "https://www.eastriding.gov.uk/online-applications":     3.0,
+    "https://eplanning.birmingham.gov.uk/online-applications": 3.0,
 }
 
 # ════════════════════════════════════════════════════════════
@@ -448,14 +488,26 @@ def safe_get(sess, url, timeout=25, retries=2):
             r = sess.get(url, timeout=timeout, allow_redirects=True)
             if r.status_code == 429:
                 wait = int(r.headers.get("Retry-After", 60))
-                # Cap wait at 90s — don't stall the whole run for one council
-                wait = min(wait, 90)
+                # Cap wait at 45s max — don't waste the whole run on one council
+                wait = min(wait, 45)
                 base = url.split("/online-applications")[0] + "/online-applications"
                 log(f"  🚫 429 on GET — waiting {wait}s before retry ({url[:50]})", 2)
+                # Track how many 429s this council has hit this session
+                _429_count[base] = _429_count.get(base, 0) + 1
+                if _429_count[base] >= 3:
+                    # 3+ consecutive 429s = council is actively throttling this IP
+                    # Mark blocked for 10 minutes and move on
+                    _rate_limited_until[base] = datetime.now() + timedelta(minutes=10)
+                    log(f"  🛑 3 consecutive 429s — marking {base[-40:]} blocked 10min", 2)
+                    return None
                 _rate_limited_until[base] = datetime.now() + timedelta(seconds=wait)
                 if attempt < retries - 1:
                     time.sleep(wait)
                     continue  # retry after waiting
+            else:
+                # Reset 429 counter on success
+                base = url.split("/online-applications")[0] + "/online-applications"
+                _429_count.pop(base, None)
             return r
         except requests.exceptions.ConnectionError as e:
             if _is_dns_error(e):
@@ -586,12 +638,19 @@ SHEET_HEADERS = [
     "Applicant", "Agent", "Date Received", "Date Decided", "Decision",
     "Trigger Words", "Score", "Keyword", "Portal Link", "Decision Doc URL",
     "Date Found", "Mark's Comments",
-    # ── Sales Intelligence ──────────────────────────────────────────────
+    # ── AI Evaluation (most important column) ─────────────────────────────
+    "AI Evaluation",         # gpt-4o: why refused / appeal grounds / first action
+    # ── Winability intelligence ──────────────────────────────────────────
+    "Winability",            # HIGH / MEDIUM / LOW
+    "Recommended Action",    # What Mark should do today
+    "Top Trigger",           # Single most impactful trigger phrase
+    # ── Sales intelligence ───────────────────────────────────────────────
     "Est. Project Value", "Developer", "Architect",
     "Impact Probability", "CH Number", "Registered Address", "Contact Link",
     # ── Appeal window ───────────────────────────────────────────────────
-    "Days to Appeal",    # e.g. "142 days (deadline 15 Oct 2026)"
-    "Appeal Urgency",    # 0-100 urgency score
+    "Days to Appeal", "Appeal Urgency",
+    # ── Enforcement flag ─────────────────────────────────────────────────
+    "Is Enforcement",        # YES if enforcement notice appeal
 ]
 
 _ws           = None   # cached worksheet
@@ -753,9 +812,17 @@ def write_lead(lead):
         lead.get("ch_number",""),
         lead.get("reg_address",""),
         lead.get("contact_link",""),
+        # AI Evaluation (Mark reads this first — gpt-4o analysis)
+        lead.get("ai_evaluation",""),
+        # Winability intelligence
+        lead.get("winability",""),
+        lead.get("recommended_action",""),
+        lead.get("top_trigger",""),
         # Appeal window
         lead.get("days_to_appeal", "Unknown"),
         str(lead.get("appeal_urgency", "")),
+        # Enforcement flag
+        lead.get("is_enforcement",""),
     ]
 
     try:
@@ -906,6 +973,11 @@ def _score_retail(desc, triggers):
     if "retail park"  in d: s += 5
     if "convenience"  in d: s += 5
     if "shop"         in d: s += 3
+    # Drive-through: almost always out-of-centre, always needs sequential test
+    if any(w in d for w in ("drive-through","drive through","drive thru","drivethrough")): s += 12
+    # Discount food retail: highest sequential test refusal rate
+    if any(w in d for w in ("aldi","lidl","iceland","home bargains","b&m","farmfoods",
+                             "food warehouse","poundland","savers")): s += 10
 
     # Penalise non-leads
     for bad in (
@@ -1356,8 +1428,8 @@ def lookup_companies_house(name):
     # Strip common suffixes to improve match quality
     clean = re.sub(
         r'(ltd|limited|plc|llp|llc|group|holdings|properties|developments?|'
-        r'architects?|associates?|consulting|consultants?|design)',
-        "", name, flags=re.I
+        r'architects?|associates?|consulting|consultants?|design|enterprises?|'
+        r'investments?|ventures?|solutions?|services?|uk)\b',
     ).strip(" .,")
     if len(clean) < 3:
         clean = name
@@ -1419,6 +1491,58 @@ def enrich_lead(lead):
     score    = lead.get("score", 50)
 
     log(f"  🔬 Enriching…", 2)
+
+    # 0. AI lead evaluation (most valuable field — Mark reads this first)
+    _ai_key_oai  = os.environ.get("OPENAI_API_KEY","").strip()
+    _ai_key_anth = os.environ.get("ANTHROPIC_API_KEY","").strip()
+    lead["ai_evaluation"] = ""
+    if _ai_key_oai or _ai_key_anth:
+        try:
+            _ai_prompt = f"""You are a specialist UK retail planning consultant at MAPlanning.
+Analyse this refused planning application and write a concise 3-part assessment (max 120 words total):
+
+COUNCIL: {council}
+DESCRIPTION: {desc}
+TRIGGER PHRASES FOUND IN DECISION NOTICE: {", ".join(triggers)}
+DECISION: {lead.get("decision","REFUSED")}
+
+Write exactly this structure (use the bold labels):
+**Why refused:** [1 sentence — the actual planning reason, citing the specific policy failure e.g. 'No sequential test submitted' or 'Failed to demonstrate no impact on town centre vitality']
+**Appeal grounds:** [1 sentence — what Mark can argue, citing NPPF paras if relevant, e.g. 'Strong appeal grounds on lack of evidence — inspector will look for sequential search; applicant has none to show']
+**First action:** [1 sentence — who to call and what to say, e.g. 'Call applicant today — offer to prepare sequential test assessment and appeal statement; 75% winnable on current evidence']
+
+Be direct and commercially useful. No padding."""
+
+            if _ai_key_oai:
+                _ai_r = requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {_ai_key_oai}",
+                             "Content-Type": "application/json"},
+                    json={"model": "gpt-4o",
+                          "max_tokens": 200,
+                          "temperature": 0.2,
+                          "messages": [{"role": "user", "content": _ai_prompt}]},
+                    timeout=25
+                )
+                if _ai_r.status_code == 200:
+                    lead["ai_evaluation"] = _ai_r.json()["choices"][0]["message"]["content"].strip()
+                    log(f"  🤖 AI evaluation: OpenAI gpt-4o ✅", 2)
+            elif _ai_key_anth:
+                _ai_r2 = requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={"x-api-key": _ai_key_anth,
+                             "anthropic-version": "2023-06-01",
+                             "Content-Type": "application/json"},
+                    json={"model": "claude-sonnet-4-6",
+                          "max_tokens": 200,
+                          "messages": [{"role": "user", "content": _ai_prompt}]},
+                    timeout=25
+                )
+                if _ai_r2.status_code == 200:
+                    lead["ai_evaluation"] = _ai_r2.json()["content"][0]["text"].strip()
+                    log(f"  🤖 AI evaluation: Claude Sonnet ✅", 2)
+        except Exception as _aie:
+            log(f"  ⚠️  AI eval error: {_aie}", 2)
 
     # 1. Project value estimate
     lo, hi = estimate_project_value(desc, council, triggers)
@@ -1483,7 +1607,34 @@ def enrich_lead(lead):
         except Exception:
             pass
 
-    # 6. Appeal urgency (retail-specific)
+    # 6. Winability, recommended action, top trigger, enforcement flag
+    _trig_str = lead.get("triggers","").lower()
+    _desc_l2  = lead.get("desc","").lower()
+    _TOP_TIER = ["lack of evidence","failure to demonstrate","not been provided",
+                 "not been submitted","no sequential","fails the sequential",
+                 "retail impact assessment","no identified need"]
+    _MID_TIER = ["sequential test","out of centre","vitality and viability",
+                 "insufficient evidence","no evidence","not justified"]
+    _top_trigger = next((t for t in _TOP_TIER if t in _trig_str), 
+                   next((t for t in _MID_TIER if t in _trig_str), 
+                   (lead.get("triggers","").split(", ")[0] if lead.get("triggers") else "")))
+    lead["top_trigger"] = _top_trigger
+    _top_hit = any(t in _trig_str for t in _TOP_TIER)
+    _mid_hit = any(t in _trig_str for t in _MID_TIER)
+    if _top_hit and score >= 75:
+        lead["winability"] = "HIGH — strong evidence failure grounds"
+        lead["recommended_action"] = f"📞 CALL TODAY — '{_top_trigger}' = clear appeal grounds"
+    elif _top_hit or (_mid_hit and score >= 65):
+        lead["winability"] = "MEDIUM — sequential test or impact grounds"
+        lead["recommended_action"] = f"📧 EMAIL THIS WEEK — grounds on '{_top_trigger}'"
+    else:
+        lead["winability"] = "LOW — general retail refusal, monitor"
+        lead["recommended_action"] = f"👀 MONITOR — review if client contacts you"
+    _enf_words = ("enforcement notice","breach of condition","enforcement action",
+                  "breach of planning control","unauthorised development")
+    lead["is_enforcement"] = "YES" if any(w in _desc_l2 for w in _enf_words) else ""
+
+    # 7. Appeal urgency (retail-specific)
     # High urgency when: evidence failures + recent decision + high score
     _urgency = 30
     desc_l = (lead.get("desc","") or "").lower()
@@ -1624,7 +1775,29 @@ def _warmup_portal_session(sess, base_url):
         time.sleep(0.8)
         # Step 4 — re-fetch search page to confirm acceptance
         r2 = safe_get(sess, search_url, timeout=18)
-        if not r2 or r2.status_code != 200 or _is_disclaimer_page(r2.text):
+        # After disclaimer POST, the server sends us to /advancedSearchResults.do
+        # That page is NOT a disclaimer but also NOT a search form, so we need to
+        # re-GET the actual search page to confirm the session is unlocked.
+        # We also check if JSESSIONID cookie is now set (reliable unlock signal).
+        _has_session = bool(sess.cookies.get("JSESSIONID") or
+                            sess.cookies.get("PHPSESSID") or
+                            any("session" in k.lower() for k in sess.cookies.keys()))
+        
+        # Re-GET search page (not results page) to confirm unlock
+        _check_url = f"{base_url}/search.do?action=advanced&searchType=Application"
+        r2_check = None
+        try:
+            r2_check = sess.get(_check_url, timeout=15, allow_redirects=True, verify=False)
+        except Exception:
+            pass
+        
+        _unlocked = (
+            _has_session or
+            (r2_check and r2_check.status_code == 200 and
+             not _is_disclaimer_page(r2_check.text))
+        )
+        
+        if not r2 or r2.status_code != 200 or (not _unlocked):
             log(f"  ⚠️  Session warmup: disclaimer accept did not unlock portal", 1)
             return False
 
@@ -2037,10 +2210,13 @@ def extract_ref(text):
 def parse_results(soup):
     items = []
     rows = (
-        soup.select("li.searchresult")            or
-        soup.select("div.searchresult")           or
-        soup.select("li[class*='searchresult']")  or
-        soup.select("div[class*='searchresult']")
+        soup.select("li.searchresult")                       or
+        soup.select("div.searchresult")                      or
+        soup.select("li[class*='searchresult']")             or
+        soup.select("div[class*='searchresult']")            or
+        # Table-based results (used by Stockport and some other councils)
+        [tr for tr in soup.select("table tr")
+         if tr.find("a", href=lambda h: h and "keyVal=" in h)]
     )
     for card in rows:
         a = (
@@ -2268,6 +2444,110 @@ def _score_text(text: str, custom_scores=None) -> int:
 
 
 # Document type priority scores (higher = better)
+
+def _abs_url(root: str, base_url: str, href: str) -> str:
+    """
+    Convert a relative href to an absolute URL.
+    
+    Handles all Idox URL patterns:
+    - Absolute URLs (http/https): returned as-is
+    - Root-relative (/path): prepended with scheme+host
+    - Relative paths: resolved against base_url directory
+    - Query strings (?key=val): appended to base without path
+    - viewDocument.do and similar Idox patterns
+    
+    Returns empty string if href is None, empty, or a javascript: URI.
+    """
+    if not href:
+        return ""
+    href = href.strip()
+    if not href or href.startswith(("javascript:", "mailto:", "#")):
+        return ""
+    # Already absolute
+    if href.startswith(("http://", "https://")):
+        return href
+    # Root-relative
+    if href.startswith("/"):
+        return root.rstrip("/") + href
+    # Relative — resolve against the base_url directory
+    from urllib.parse import urljoin
+    return urljoin(base_url, href)
+
+
+def _resolve_viewdoc(sess, url, base_url, soup_of_doc_tab=None):
+    """
+    Resolve an Idox /viewDocument.do?docRef=XXX URL to a direct file URL.
+
+    Idox portals serve documents via a redirect chain:
+      /viewDocument.do?docRef=12345  →  /files/open/1234/DecisionNotice.pdf
+
+    If we try to download the viewDocument.do URL directly, we often get
+    an HTML "Document Unavailable" page instead of a PDF.
+
+    This function follows the redirect, extracts the direct PDF URL,
+    and optionally pre-fetches the content so scan_pdf doesn't re-download.
+
+    Returns (resolved_url, prefetched_response_or_None)
+    """
+    if not url:
+        return url, None
+
+    # Only resolve viewDocument.do URLs — direct file URLs are already fine
+    if "viewDocument.do" not in url and "/files/" in url:
+        return url, None
+
+    if "viewDocument.do" not in url:
+        # Try to prefetch for efficiency (avoids double-download in scan_pdf)
+        try:
+            r = sess.get(url, headers={"Accept": "application/pdf,*/*"},
+                         timeout=40, allow_redirects=True, verify=False)
+            if r.status_code == 200 and "html" not in r.headers.get("Content-Type","").lower():
+                return url, r
+        except Exception:
+            pass
+        return url, None
+
+    # ── Follow viewDocument.do redirect ───────────────────────────────────────
+    from urllib.parse import urlparse as _up, urljoin as _uj
+    p = _up(base_url)
+    root = f"{p.scheme}://{p.netloc}"
+
+    try:
+        r = sess.get(url, headers={"Accept": "application/pdf,*/*,text/html"},
+                     timeout=30, allow_redirects=True, verify=False)
+
+        # If we got a PDF directly, great
+        ct = r.headers.get("Content-Type","").lower()
+        if r.status_code == 200 and ("pdf" in ct or r.content[:4] == b"%PDF"):
+            return r.url, r  # use final URL (after redirects) and pre-fetched content
+
+        # We got HTML — parse it to find the actual file link
+        if "html" in ct and r.status_code == 200:
+            from bs4 import BeautifulSoup as _BS
+            soup = _BS(r.text, "html.parser")
+            # Look for a direct PDF link in the response
+            for a in soup.find_all("a", href=True):
+                href = a["href"]
+                if ".pdf" in href.lower() or "/files/" in href:
+                    resolved = _abs_url(root, base_url, href)
+                    if resolved:
+                        # Pre-fetch this direct URL
+                        try:
+                            r2 = sess.get(resolved,
+                                          headers={"Accept": "application/pdf,*/*"},
+                                          timeout=40, allow_redirects=True, verify=False)
+                            if r2.status_code == 200:
+                                return resolved, r2
+                        except Exception:
+                            pass
+                        return resolved, None
+
+        # Fallback: return original URL, let scan_pdf handle it
+        return url, None
+
+    except Exception:
+        return url, None
+
 def find_decision_doc(sess, base_url, key_val, custom_scores=None): # Add custom_scores here
     """
     Fetch the Documents tab and find the best decision notice.
@@ -2351,8 +2631,29 @@ def find_decision_doc(sess, base_url, key_val, custom_scores=None): # Add custom
     ranked = sorted(seen_urls.values(), key=lambda x: -x["score"])
 
     if not ranked:
-        log(f"  ❌ No document links found ({len(soup.find_all('a'))} total anchors on page)", 2)
-        return None, None
+        # Strategy 5: last resort — grab ANY PDF link on the page
+        # Some councils put all docs in a generic list with no useful labels.
+        # We prefer decision-notice-looking filenames, then any PDF.
+        _all_pdfs = []
+        for a in soup.find_all("a", href=True):
+            h = a["href"]
+            if ".pdf" in h.lower() or "download" in h.lower() or "getfile" in h.lower():
+                _u = _abs_url(root, base_url, h)
+                if _u:
+                    _fname = h.lower().split("/")[-1].split("?")[0]
+                    # Score: prefer decision/refusal named files
+                    _sc5 = 50 if any(w in _fname for w in ["dec", "refus", "notice", "officer"]) else 5
+                    _all_pdfs.append((_sc5, _u, a.get_text(strip=True)[:40]))
+        
+        if _all_pdfs:
+            _all_pdfs.sort(key=lambda x: -x[0])
+            _best_pdf_score, _best_pdf_url, _best_pdf_label = _all_pdfs[0]
+            log(f"  ⚠️  No scored docs — using PDF fallback: {_best_pdf_label[:50]}", 2)
+            candidates.append({"score": _best_pdf_score, "url": _best_pdf_url, "label": _best_pdf_label})
+            ranked = [candidates[-1]]
+        else:
+            log(f"  ❌ No document links found ({len(soup.find_all('a'))} total anchors on page)", 2)
+            return None, None
 
     log(f"  Found {len(ranked)} candidate doc links", 2)
     for cand in ranked[:3]:
@@ -2378,23 +2679,43 @@ def find_decision_doc(sess, base_url, key_val, custom_scores=None): # Add custom
 # ("sequential test", "nppf") while still recommending approval.
 # We require at least one explicit refusal phrase in the document.
 _REFUSAL_PHRASES = [
-    "is refused", 
-    "be refused", 
-    "hereby refused", 
+    # Standard English LPA language
+    "is refused",
+    "be refused",
+    "hereby refused",
     "refusal of",
-    "reasons for refusal", 
-    "reason for refusal", 
+    "reasons for refusal",
+    "reason for refusal",
     "refuse planning permission",
-    "refused planning permission", 
+    "refused planning permission",
     "application is refused",
-    "permission is refused", 
+    "permission is refused",
     "appeal is dismissed",
-    # Added for Officer Reports
-    "recommendation: refuse", 
-    "recommended for refusal", 
+    # Officer report / delegated report language
+    "recommendation: refuse",
+    "recommended for refusal",
     "refusal be granted",
-    "officer recommendation: refusal", 
-    "concluded that planning permission be refused"       # appeal decision = original refusal confirmed
+    "officer recommendation: refusal",
+    "concluded that planning permission be refused",
+    "delegate to refuse",
+    "delegated refusal",
+    "recommend refusal",
+    "recommends refusal",
+    # Planning Inspectorate (appeal decisions)
+    "the appeal is dismissed",
+    "i dismiss this appeal",
+    "appeal dismissed",
+    "planning permission is not granted",
+    # Welsh Planning decisions (TAN 4 / PPW)
+    "gwrthodwyd",              # Welsh: "refused"
+    "yn cael ei wrthod",       # Welsh: "is refused"
+    # Non-standard council wording
+    "not be granted",
+    "refused on the grounds",
+    "refused for the following reasons",
+    "the local planning authority refuses",
+    "permission be withheld",
+    "has been refused",
 ]
 
 def scan_pdf(sess, pdf_url, prefetched_response=None):
@@ -2469,7 +2790,7 @@ def scan_pdf(sess, pdf_url, prefetched_response=None):
         # ── Check 2: Proximity-based Trigger Words ──────────────
         found = []
         # Anchor words that indicate the actual decision context
-        anchors = ["refuse", "refused", "refusal", "dismiss", "dismissed", "unacceptable", "harm"]
+        anchors = ["refuse","refused","refusal","dismiss","dismissed","unacceptable","harm","conflict","contrary to","reasons for refusal","is refused","be refused","not justified","fails to","would cause","has not been","not been demonstrated","policy","nppf"]
         
         for w in PDF_TRIGGERS:
             if w in text:
@@ -2477,8 +2798,8 @@ def scan_pdf(sess, pdf_url, prefetched_response=None):
                 trigger_idx = text.find(w)
                 
                 # Create a window of ~800 chars (~100 words) around the trigger
-                window_start = max(0, trigger_idx - 800)
-                window_end = min(len(text), trigger_idx + len(w) + 800)
+                window_start = max(0, trigger_idx - 2000)
+                window_end = min(len(text), trigger_idx + len(w) + 2000)
                 window_text = text[window_start:window_end]
                 
                 # Only count the trigger if an anchor word is nearby
@@ -2486,7 +2807,13 @@ def scan_pdf(sess, pdf_url, prefetched_response=None):
                     found.append(w)
                     log(f"  🎯 '{w}' (validated by proximity)", 2)
                 else:
-                    log(f"  ⚠️ '{w}' found, but too far from refusal context — ignoring", 2)
+                    # For confirmed refusal docs, include high-value triggers even without proximity
+                    if is_refused and w in ("sequential","nppf","out of centre","vitality",
+                                            "viability","national planning policy framework"):
+                        found.append(w)
+                        log(f"  🎯 '{w}' (confirmed refusal doc — included)", 2)
+                    else:
+                        log(f"  ⚠️ '{w}' found without refusal context — ignoring", 2)
 
         if not found:
             log(f"  ❌ No validated triggers within proximity of refusal language", 2)
@@ -2512,11 +2839,22 @@ def process_app(sess, base_url, council, item):
 
     # Pre-filter 1: skip clearly non-refused decisions immediately
     decision_raw = det.get("decision", "").lower().strip()
-    _APPROVAL_WORDS = ["granted", "approved", "permitted", "conditional grant"]
+    # Non-refusal decisions — skip immediately without hitting Documents tab
+    _NON_REFUSAL = [
+        "granted", "approved", "permitted", "conditional grant",
+        "conditions discharged", "prior approval not required",
+        "prior approval required and approved",
+        "prior approval refused",       # prior approval ≠ planning refusal (different procedure)
+        "not required", "withdrawn", "invalid", "void",
+        "non determined",               # non-determination = applicant appealed, not a refusal notice
+        "no objection",
+        "permission with legal agreement",
+        "permission subject to",
+        "application permitted",
+    ]
     
     if decision_raw:
-        # If the portal says it's approved, we stop immediately.
-        if any(w in decision_raw for w in _APPROVAL_WORDS):
+        if any(w in decision_raw for w in _NON_REFUSAL):
             log(f"  ⏭️  Portal says '{det.get('decision','')}' — skip", 2)
             return None
 
@@ -2584,8 +2922,8 @@ def process_app(sess, base_url, council, item):
     }
     # Sales intelligence enrichment
     enrich_lead(lead)
-    write_lead(lead)
-    return lead
+    enrich_lead(lead)  # safe in thread — no Sheets I/O
+    # write_lead is called sequentially AFTER all threads complete (thread-safe)
 
 # ════════════════════════════════════════════════════════════
 # SCRAPE ONE COUNCIL
@@ -2616,7 +2954,7 @@ def scrape_council(council, base_url, date_from, date_to):
                 i["keyword"] = kw
             all_items.extend(new)
             # Longer delay for rate-sensitive councils
-            kw_sleep = 3.0 if base_url in SLOW_COUNCILS else 1.0
+            kw_sleep = SLOW_COUNCILS.get(base_url, SLOW_COUNCILS.get(base_url.rstrip('/'), 1.0))
             time.sleep(kw_sleep)
         except Exception as e:
             log(f"  ❌ Keyword '{kw}': {e}")
@@ -2626,17 +2964,45 @@ def scrape_council(council, base_url, date_from, date_to):
     if not all_items:
         return []
 
+    import threading as _thr
+    _lock = _thr.Lock()
+    _q_results = []
+    _MAX_W = 3
+
+    def _worker(it):
+        try:
+            _ws = new_session()
+            _warmup_portal_session(_ws, base_url)
+            _lead = process_app(_ws, base_url, council, it)
+            if _lead:
+                with _lock: _q_results.append(_lead)
+        except Exception as _we:
+            log(f"  ❌ {it.get('ref','?')}: {_we}")
+
+    _threads = []
     for idx, item in enumerate(all_items):
         log(f"\n  [{idx+1}/{len(all_items)}]")
-        try:
-            lead = process_app(sess, base_url, council, item)
-            if lead:
-                qualified.append(lead)
-        except Exception as e:
-            log(f"  ❌ {item.get('ref','?')}: {e}")
-        time.sleep(1)
+        while sum(1 for t in _threads if t.is_alive()) >= _MAX_W:
+            time.sleep(0.3)
+        _t = _thr.Thread(target=_worker, args=(item,), daemon=True)
+        _t.start()
+        _threads.append(_t)
+        time.sleep(0.3)
+    for _t in _threads:
+        _t.join(timeout=90)
 
-    log(f"\n✅ {council}: {len(qualified)} qualified leads")
+    qualified = sorted(_q_results, key=lambda x: x.get("score",0), reverse=True)
+
+    # ── Write leads SEQUENTIALLY (safe — all threads done) ───────────────────
+    written = 0
+    for lead in qualified:
+        try:
+            if write_lead(lead):
+                written += 1
+        except Exception as _we:
+            log(f"  ❌ write_lead failed for {lead.get('ref','?')}: {_we}")
+
+    log(f"\n✅ {council}: {len(qualified)} qualified | {written} written to Sheets")
     return qualified
 
 # ════════════════════════════════════════════════════════════
@@ -2909,7 +3275,7 @@ Return ONLY the letter. No preamble or explanation."""
                     "Content-Type":  "application/json",
                 },
                 json={
-                    "model":       "gpt-4o-mini",  # fast + cheap; upgrade to gpt-4o for higher quality
+                    "model":       "gpt-4o",       # full model — legal document qualityity
                     "max_tokens":  1200,
                     "temperature": 0.3,            # low temp = consistent, formal tone
                     "messages":    [{"role": "user", "content": _prompt}],
@@ -2918,7 +3284,7 @@ Return ONLY the letter. No preamble or explanation."""
             )
             if _r.status_code == 200:
                 _text = _r.json()["choices"][0]["message"]["content"].strip()
-                log(f"  ✅ OpenAI objection draft ({len(_text)} chars, model: gpt-4o-mini)", 2)
+                log(f"  ✅ OpenAI objection draft ({len(_text)} chars, model: gpt-4o)", 2)
                 return _text
             else:
                 log(f"  ⚠️  OpenAI API {_r.status_code} — trying Anthropic fallback", 2)
@@ -2937,7 +3303,7 @@ Return ONLY the letter. No preamble or explanation."""
                     "Content-Type":      "application/json",
                 },
                 json={
-                    "model":      "claude-haiku-4-5-20251001",  # fast + affordable
+                    "model":      "claude-sonnet-4-6",  # better legal writing quality
                     "max_tokens": 1200,
                     "messages":   [{"role": "user", "content": _prompt}],
                 },
@@ -3138,7 +3504,7 @@ def run():
     date_from = (today - timedelta(weeks=WEEKS_TO_SCRAPE)).strftime("%d/%m/%Y")
 
     print("=" * 60)
-    print(f"🏗️  MAPlanning Retail Lead Engine v21")
+    print(f"🏗️  MAPlanning Retail Lead Engine v24")
     print(f"📅  {today.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"📆  {date_from} → {date_to}  ({WEEKS_TO_SCRAPE} weeks)")
     print(f"🏛️  {len(COUNCILS)} councils configured")
@@ -3197,6 +3563,19 @@ def run():
             time.sleep(pause)
 
     grand.sort(key=lambda x: x["score"], reverse=True)
+
+    # ── Run summary ──────────────────────────────────────────────────────
+    _enf  = [l for l in grand if l.get("is_enforcement") == "YES"]
+    _high = [l for l in grand if l.get("score",0) >= 80]
+    log(f"\n{'='*60}")
+    log(f"📊 RUN SUMMARY: {len(grand)} qualified leads | {len(_high)} HIGH | {len(_enf)} enforcement")
+    if _enf:
+        log("  ⚡ ENFORCEMENT (28-day window):")
+        for l in _enf[:3]: log(f"    • {l['council']} | {l['ref']} | {l['addr'][:40]}")
+    if _high:
+        log("  🔴 HIGH PRIORITY:")
+        for l in _high[:5]: log(f"    [{l['score']}] {l['council']} | {l.get('recommended_action','')[:70]}")
+    log(f"{'='*60}")
 
     # ── NEW APPLICATIONS MODE — Mark's competitor alert system ────────────────
     _new_app_count = 0
