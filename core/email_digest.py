@@ -50,7 +50,6 @@ DAYS_BACK  = 999    # ← CHANGE THIS to 999 to send everything in the sheet
 #
 # Change GMAIL_TO secret to:
 #   "your@email.com"                    ← just you (test)
-#   "contact@maplanning.co.uk"          ← just Mark
 #   "you@email.com,contact@maplanning.co.uk"  ← both
 #
 FALLBACK_TO = "inger.balaj@gmail.com"   # ← only used if GMAIL_TO secret is missing
