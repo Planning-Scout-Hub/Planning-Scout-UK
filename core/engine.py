@@ -1,6 +1,11 @@
 import subprocess, sys
-subprocess.check_call([sys.executable, "-m", "pip", "install",
-    "requests", "beautifulsoup4", "pdfplumber", "gspread", "google-auth", "-q"])
+try:
+    subprocess.check_call([sys.executable, "-m", "pip", "install",
+        "requests", "beautifulsoup4", "pdfplumber", "gspread",
+        "google-auth", "anthropic", "-q", "--disable-pip-version-check"],
+        timeout=120)
+except Exception as _pip_err:
+    print(f"⚠️  pip install warning: {_pip_err} (continuing — packages may already be installed)")
 
 import requests, re, io, time, urllib3, socket
 from datetime import datetime, timedelta
@@ -157,7 +162,20 @@ args, _unknown = parser.parse_known_args()
 WEEKS_TO_SCRAPE = args.weeks
 RUN_MODE        = args.mode
 
-import email_digest
+import sys, os
+# Make sure core/ is in path so email_digest is found whether running from
+# repo root (python core/engine.py) or from core/ directly
+_engine_dir = os.path.dirname(os.path.abspath(__file__))
+if _engine_dir not in sys.path:
+    sys.path.insert(0, _engine_dir)
+try:
+    import email_digest
+    _email_digest_ok = True
+except ImportError as _e:
+    print(f"⚠️  email_digest not found ({_e}). Email will be skipped.")
+    email_digest = None
+    _email_digest_ok = False
+
 import pdfplumber
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -658,23 +676,45 @@ def preflight_check(councils):
 # GOOGLE SHEETS — with retry + in-memory dedup cache
 # ════════════════════════════════════════════════════════════
 SHEET_HEADERS = [
-    "Council", "Reference", "Address", "Description", "App Type",
-    "Applicant", "Agent", "Date Received", "Date Decided", "Decision",
-    "Trigger Words", "Score", "Keyword", "Portal Link", "Decision Doc URL",
-    "Date Found", "Mark's Comments",
-    # ── AI Evaluation (most important column) ─────────────────────────────
-    "AI Evaluation",         # gpt-4o: why refused / appeal grounds / first action
-    # ── Winability intelligence ──────────────────────────────────────────
-    "Winability",            # HIGH / MEDIUM / LOW
-    "Recommended Action",    # What Mark should do today
-    "Top Trigger",           # Single most impactful trigger phrase
-    # ── Sales intelligence ───────────────────────────────────────────────
-    "Est. Project Value", "Developer", "Architect",
-    "Impact Probability", "CH Number", "Registered Address", "Contact Link",
-    # ── Appeal window ───────────────────────────────────────────────────
-    "Days to Appeal", "Appeal Urgency",
-    # ── Enforcement flag ─────────────────────────────────────────────────
-    "Is Enforcement",        # YES if enforcement notice appeal
+    # ── Core application data (cols 1-16) ─────────────────────────────────
+    "Council",            # 1
+    "Reference",          # 2
+    "Address",            # 3
+    "Description",        # 4
+    "App Type",           # 5
+    "Applicant",          # 6
+    "Agent",              # 7
+    "Date Received",      # 8
+    "Date Decided",       # 9
+    "Decision",           # 10
+    "Trigger Words",      # 11
+    "Score",              # 12
+    "Keyword",            # 13
+    "Portal Link",        # 14
+    "Decision Doc URL",   # 15
+    "Date Found",         # 16
+    # ── Mark's workspace (col 17) ─────────────────────────────────────────
+    "Mark's Comments",    # 17  ← Mark writes here
+    # ── AI Intelligence block (cols 18-21) ────────────────────────────────
+    # These appear first so Mark sees them immediately when opening the sheet
+    "AI Evaluation",      # 18  ← Why refused / appeal grounds / first action
+    "Winability",         # 19  ← HIGH / MEDIUM / LOW
+    "Recommended Action", # 20  ← Specific next step for Mark
+    "Top Trigger",        # 21  ← Single most impactful trigger phrase
+    # ── Time & urgency (cols 22-24) ───────────────────────────────────────
+    "Est. Work Time",     # 22  ← NEW: Mark's estimated hours to complete work
+    "Days to Appeal",     # 23  ← Days remaining in 6-month appeal window
+    "Appeal Urgency",     # 24  ← 0-100 urgency score
+    # ── Sales intelligence (cols 25-31) ──────────────────────────────────
+    "Est. Project Value", # 25
+    "Developer",          # 26
+    "Architect",          # 27
+    "Impact Probability", # 28
+    "CH Number",          # 29
+    "Registered Address", # 30
+    "Contact Link",       # 31
+    # ── Flags (col 32) ────────────────────────────────────────────────────
+    "Is Enforcement",     # 32
 ]
 
 _ws           = None   # cached worksheet
@@ -728,17 +768,33 @@ def get_sheet():
         def _connect():
             gc_client = _make_gspread_client()
             ws = gc_client.open_by_key(SHEET_ID).worksheet("Leads")
-            existing = ws.row_values(1)
-            if existing != SHEET_HEADERS:
+
+            # ── Sync headers precisely ─────────────────────────────────────
+            # Strategy: compare existing row 1 against SHEET_HEADERS.
+            # If ANY mismatch (wrong header OR ghost columns beyond len):
+            #   1. Clear entire row 1 first (removes ghost columns)
+            #   2. Write correct SHEET_HEADERS
+            existing    = ws.row_values(1)
+            need_update = (existing[:len(SHEET_HEADERS)] != SHEET_HEADERS
+                           or len(existing) != len(SHEET_HEADERS))
+            if need_update:
+                log("🔧 Fixing sheet headers (clearing ghost columns + rewriting)…")
+                # Clear all content in row 1 first
+                last_col_letter = gspread.utils.rowcol_to_a1(1, max(len(existing), len(SHEET_HEADERS)))[:-1]
+                try:
+                    ws.batch_clear([f"A1:{last_col_letter}1"])
+                except Exception:
+                    pass  # best effort
+                # Now write correct headers
                 ws.update(values=[SHEET_HEADERS], range_name="A1")
-                log("✅ Headers written")
-            else:
-                log("✅ Sheets connected")
+                log(f"✅ Headers written: {len(SHEET_HEADERS)} columns")
+
             return ws
+
         _ws = sheets_retry(_connect)
         return _ws
     except Exception as e:
-        log(f"❌ Sheets connect failed after retries: {e}")
+        log(f"❌ Sheets connection failed: {e}")
         return None
 
 def load_existing_refs():
@@ -822,32 +878,51 @@ def write_lead(lead):
         return False
 
     row_data = [
-        lead["council"], lead["ref"], lead["addr"], lead["desc"],
-        lead["app_type"], lead["applicant"], lead["agent"],
-        lead["date_rec"], lead["date_dec"], lead.get("decision", "REFUSED"),
-        lead["triggers"], lead["score"], lead["keyword"],
-        lead["url"], lead["doc_url"],
-        datetime.now().strftime("%Y-%m-%d %H:%M"), "",
-        # Sales intelligence columns
-        lead.get("est_value",""),
-        lead.get("developer",""),
-        lead.get("architect",""),
-        str(lead.get("impact_prob","")) + "%" if lead.get("impact_prob") else "",
-        lead.get("ch_number",""),
-        lead.get("reg_address",""),
-        lead.get("contact_link",""),
-        # AI Evaluation (Mark reads this first — gpt-4o analysis)
-        lead.get("ai_evaluation",""),
-        # Winability intelligence
-        lead.get("winability",""),
-        lead.get("recommended_action",""),
-        lead.get("top_trigger",""),
-        # Appeal window
-        lead.get("days_to_appeal", "Unknown"),
-        str(lead.get("appeal_urgency", "")),
-        # Enforcement flag
-        lead.get("is_enforcement",""),
+        # ── Core application data (cols 1-16) — must match SHEET_HEADERS ──
+        lead.get("council", ""),
+        lead.get("ref",     ""),
+        lead.get("addr",    ""),
+        lead.get("desc",    ""),
+        lead.get("app_type",   ""),
+        lead.get("applicant",  ""),
+        lead.get("agent",      ""),
+        lead.get("date_rec",   ""),
+        lead.get("date_dec",   ""),
+        lead.get("decision",   "REFUSED"),
+        lead.get("triggers",   ""),
+        lead.get("score",      ""),
+        lead.get("keyword",    ""),
+        lead.get("url",        ""),
+        lead.get("doc_url",    ""),
+        datetime.now().strftime("%Y-%m-%d %H:%M"),  # col 16: Date Found
+        # ── Mark's workspace (col 17) ──────────────────────────────────────
+        "",                                          # col 17: Mark's Comments (blank — Mark fills in)
+        # ── AI Intelligence block (cols 18-21) ────────────────────────────
+        lead.get("ai_evaluation",    ""),            # col 18: AI Evaluation
+        lead.get("winability",       ""),            # col 19: Winability
+        lead.get("recommended_action",""),           # col 20: Recommended Action
+        lead.get("top_trigger",      ""),            # col 21: Top Trigger
+        # ── Time & urgency (cols 22-24) ───────────────────────────────────
+        lead.get("est_work_time",    ""),            # col 22: Est. Work Time (NEW)
+        lead.get("days_to_appeal",   "Unknown"),     # col 23: Days to Appeal
+        str(lead.get("appeal_urgency", "")),         # col 24: Appeal Urgency
+        # ── Sales intelligence (cols 25-31) ──────────────────────────────
+        lead.get("est_value",    ""),                # col 25: Est. Project Value
+        lead.get("developer",    ""),                # col 26: Developer
+        lead.get("architect",    ""),                # col 27: Architect
+        (str(lead.get("impact_prob","")) + "%"
+         if lead.get("impact_prob") else ""),        # col 28: Impact Probability
+        lead.get("ch_number",    ""),                # col 29: CH Number
+        lead.get("reg_address",  ""),                # col 30: Registered Address
+        lead.get("contact_link", ""),                # col 31: Contact Link
+        # ── Flags (col 32) ────────────────────────────────────────────────
+        lead.get("is_enforcement", ""),              # col 32: Is Enforcement
     ]
+
+    # Safety check: row must be exactly as wide as SHEET_HEADERS
+    if len(row_data) != len(SHEET_HEADERS):
+        log(f"  ❌ row_data length {len(row_data)} ≠ SHEET_HEADERS {len(SHEET_HEADERS)} — aborting write")
+        return False
 
     try:
         # Use lambda here to match your retry logic
@@ -1528,59 +1603,155 @@ def enrich_lead(lead):
 
     log(f"  🔬 Enriching…", 2)
 
-    # 0. AI lead evaluation (most valuable field — Mark reads this first)
-    _ai_key_oai  = os.environ.get("OPENAI_API_KEY","").strip()
-    _ai_key_anth = os.environ.get("ANTHROPIC_API_KEY","").strip()
+    # ── 0. AI lead evaluation ──────────────────────────────────────────────
+    # Uses Claude (Anthropic) as primary if ANTHROPIC_API_KEY is set.
+    # Falls back to OpenAI gpt-4o if OPENAI_API_KEY is set.
+    # Falls back to a rule-based evaluation if neither key is available.
+    # The AI evaluation is the most important field — Mark reads it first.
+    _ai_key_anth = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    _ai_key_oai  = os.environ.get("OPENAI_API_KEY",    "").strip()
     lead["ai_evaluation"] = ""
-    if _ai_key_oai or _ai_key_anth:
+
+    _ai_prompt = f"""You are a specialist UK retail and Class E planning consultant working at MAPlanning consultancy.
+Mark, the consultant, needs to quickly decide whether to pursue this refused planning application as an appeal case.
+
+APPLICATION DETAILS:
+Council: {council}
+Description: {desc}
+Decision: {lead.get("decision", "REFUSED")}
+Trigger phrases found in decision notice: {", ".join(triggers) if triggers else "none detected"}
+Lead Score: {score}/100
+
+Write a concise 3-part assessment using EXACTLY this format (include the bold labels, keep total under 130 words):
+
+**Why refused:** [One sentence — the specific planning policy failure. Cite NPPF paragraph, policy name, or test that was failed. E.g. "Refused on sequential test grounds — applicant failed to demonstrate no suitable town centre sites, contrary to NPPF para 86."]
+
+**Appeal grounds:** [One sentence — what Mark can argue and how strong it is. E.g. "Strong grounds: inspector will require sequential search evidence; applicant has none on record, making this highly winnable on written representations."]
+
+**First action:** [One sentence — exactly what Mark should do. Name the step, timeframe, and why. E.g. "Call applicant this week — offer to prepare sequential test assessment (2-3 days work) and appeal statement; 70-80% win probability on current evidence."]
+
+Be direct and commercially specific. No padding. No generic phrases."""
+
+    if _ai_key_anth:
         try:
-            _ai_prompt = f"""You are a specialist UK retail planning consultant at MAPlanning.
-Analyse this refused planning application and write a concise 3-part assessment (max 120 words total):
-
-COUNCIL: {council}
-DESCRIPTION: {desc}
-TRIGGER PHRASES FOUND IN DECISION NOTICE: {", ".join(triggers)}
-DECISION: {lead.get("decision","REFUSED")}
-
-Write exactly this structure (use the bold labels):
-**Why refused:** [1 sentence — the actual planning reason, citing the specific policy failure e.g. 'No sequential test submitted' or 'Failed to demonstrate no impact on town centre vitality']
-**Appeal grounds:** [1 sentence — what Mark can argue, citing NPPF paras if relevant, e.g. 'Strong appeal grounds on lack of evidence — inspector will look for sequential search; applicant has none to show']
-**First action:** [1 sentence — who to call and what to say, e.g. 'Call applicant today — offer to prepare sequential test assessment and appeal statement; 75% winnable on current evidence']
-
-Be direct and commercially useful. No padding."""
-
-            if _ai_key_oai:
-                _ai_r = requests.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {_ai_key_oai}",
-                             "Content-Type": "application/json"},
-                    json={"model": "gpt-4o",
-                          "max_tokens": 200,
-                          "temperature": 0.2,
-                          "messages": [{"role": "user", "content": _ai_prompt}]},
-                    timeout=25
-                )
-                if _ai_r.status_code == 200:
-                    lead["ai_evaluation"] = _ai_r.json()["choices"][0]["message"]["content"].strip()
-                    log(f"  🤖 AI evaluation: OpenAI gpt-4o ✅", 2)
-            elif _ai_key_anth:
-                _ai_r2 = requests.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={"x-api-key": _ai_key_anth,
-                             "anthropic-version": "2023-06-01",
-                             "Content-Type": "application/json"},
-                    json={"model": "claude-sonnet-4-6",
-                          "max_tokens": 200,
-                          "messages": [{"role": "user", "content": _ai_prompt}]},
-                    timeout=25
-                )
-                if _ai_r2.status_code == 200:
-                    lead["ai_evaluation"] = _ai_r2.json()["content"][0]["text"].strip()
-                    log(f"  🤖 AI evaluation: Claude Sonnet ✅", 2)
+            _ai_r = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={"x-api-key": _ai_key_anth,
+                         "anthropic-version": "2023-06-01",
+                         "Content-Type": "application/json"},
+                json={"model": "claude-opus-4-5",
+                      "max_tokens": 220,
+                      "temperature": 0.2,
+                      "system": "You are a specialist UK planning consultant. Write concise, commercially useful assessments.",
+                      "messages": [{"role": "user", "content": _ai_prompt}]},
+                timeout=30
+            )
+            if _ai_r.status_code == 200:
+                lead["ai_evaluation"] = _ai_r.json()["content"][0]["text"].strip()
+                log("  🤖 AI evaluation: Claude Opus ✅", 2)
+            else:
+                log(f"  ⚠️  Anthropic API {_ai_r.status_code}: {_ai_r.text[:80]}", 2)
         except Exception as _aie:
-            log(f"  ⚠️  AI eval error: {_aie}", 2)
+            log(f"  ⚠️  Anthropic AI eval error: {_aie}", 2)
 
-    # 1. Project value estimate
+    if not lead["ai_evaluation"] and _ai_key_oai:
+        try:
+            _ai_r2 = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {_ai_key_oai}",
+                         "Content-Type": "application/json"},
+                json={"model": "gpt-4o",
+                      "max_tokens": 220,
+                      "temperature": 0.2,
+                      "messages": [{"role": "user", "content": _ai_prompt}]},
+                timeout=30
+            )
+            if _ai_r2.status_code == 200:
+                lead["ai_evaluation"] = _ai_r2.json()["choices"][0]["message"]["content"].strip()
+                log("  🤖 AI evaluation: OpenAI gpt-4o ✅", 2)
+        except Exception as _aie2:
+            log(f"  ⚠️  OpenAI AI eval error: {_aie2}", 2)
+
+    # ── Rule-based fallback evaluation when no API key is available ────────
+    # This ensures the AI Evaluation column is NEVER blank.
+    # It's less nuanced than the LLM version but always reliable.
+    if not lead["ai_evaluation"]:
+        _tw_low = " ".join(triggers).lower()
+        _desc_low = desc.lower()
+
+        # Determine primary refusal type
+        if any(w in _tw_low for w in ("sequential test", "sequential approach",
+                                       "fail the sequential", "no sequential",
+                                       "sequentially preferable")):
+            _why   = "Refused on sequential test grounds — no sequential search submitted."
+            _appeal = "High appeal potential: inspector will require sequential evidence; applicant has none."
+            _action = "Call applicant this week — offer sequential test assessment + appeal statement."
+            _win   = "75-85%"
+        elif any(w in _tw_low for w in ("lack of evidence", "insufficient evidence",
+                                          "failure to demonstrate", "not been provided",
+                                          "in the absence of")):
+            _why   = "Refused for lack of supporting evidence — applicant failed to demonstrate acceptability."
+            _appeal = "Strong grounds: evidence-failure refusals are frequently overturned on appeal."
+            _action = "Contact applicant — offer to prepare evidence report + appeal documents."
+            _win   = "70-80%"
+        elif any(w in _tw_low for w in ("out of centre", "out-of-centre",
+                                          "outside the town centre", "retail impact")):
+            _why   = "Refused on out-of-centre / retail impact grounds — location conflict with NPPF."
+            _appeal = "Moderate grounds: depends on sequential search quality and impact assessment."
+            _action = "Review decision notice in full — assess whether impact grounds are genuinely evidenced."
+            _win   = "55-70%"
+        elif any(w in _tw_low for w in ("vitality and viability", "harm to the vitality",
+                                          "impact on the town centre")):
+            _why   = "Refused on town centre vitality / viability impact grounds."
+            _appeal = "Grounds depend on whether council has quantified the harm — often challengeable."
+            _action = "Check decision notice for evidence of quantified harm; if absent, appeal is viable."
+            _win   = "50-65%"
+        else:
+            _why   = f"Refused — triggers found: {', '.join(triggers[:3]) if triggers else 'see decision notice'}."
+            _appeal = "Review decision notice to identify primary refusal ground before advising."
+            _action = "Request full decision notice and assess appeal viability before contacting applicant."
+            _win   = "Unknown"
+
+        lead["ai_evaluation"] = (
+            f"**Why refused:** {_why}\n"
+            f"**Appeal grounds:** {_appeal}\n"
+            f"**First action:** {_action} (Est. win rate: {_win})"
+        )
+        log("  🤖 AI evaluation: rule-based fallback (set ANTHROPIC_API_KEY for LLM analysis)", 2)
+
+    # ── 0b. Estimated Work Time for Mark ────────────────────────────────────
+    # Based on appeal type and complexity, estimate Mark's hours to complete.
+    # This helps Mark prioritise which leads fit his current capacity.
+    _tw_low  = " ".join(triggers).lower()
+    _desc_low = desc.lower()
+
+    if any(w in _tw_low for w in ("sequential test", "no sequential", "fail the sequential")):
+        # Sequential test appeal: need sequential search + appeal statement
+        _work_h = "3-5 days"
+        _work_detail = "(sequential search + appeal statement + NPPF argument)"
+    elif any(w in _tw_low for w in ("retail impact assessment", "retail impact study", "impact assessment")):
+        # Retail impact needed: substantial technical work
+        _work_h = "5-8 days"
+        _work_detail = "(retail impact assessment + appeal docs)"
+    elif any(w in _tw_low for w in ("lack of evidence", "insufficient evidence",
+                                      "failure to demonstrate", "in the absence of")):
+        # Evidence failure: draft supporting statement, gather evidence
+        _work_h = "2-4 days"
+        _work_detail = "(evidence report + appeal statement)"
+    elif any(w in _tw_low for w in ("out of centre", "out-of-centre", "vitality", "viability")):
+        _work_h = "3-5 days"
+        _work_detail = "(policy analysis + impact argument + statement)"
+    else:
+        _work_h = "2-3 days"
+        _work_detail = "(appeal statement + grounds)"
+
+    # Add urgency note if enforcement or Class Q
+    if lead.get("is_enforcement") == "YES":
+        _work_h = "URGENT: 1-2 days"
+        _work_detail = "(enforcement appeal — 28-day deadline)"
+
+    lead["est_work_time"] = f"{_work_h} {_work_detail}"
+    log(f"  ⏱️  Est. work time: {_work_h}", 2)
     lo, hi = estimate_project_value(desc, council, triggers)
     lead["est_value"] = f"{lo} – {hi}"
     log(f"  💰 Est. value: {lead['est_value']}", 2)
@@ -3801,20 +3972,15 @@ def run():
     #      guards against spurious fast crashes triggering email)
     #   3. Send regardless of 0 new leads — weekly_count from sheet still
     #      makes the email useful (shows what was already found)
-    if os.environ.get("GMAIL_APP_PASSWORD"):
-        councils_with_results = sum(1 for n in summary.values() if n >= 0)
+    if os.environ.get("GMAIL_APP_PASSWORD") and _email_digest_ok and email_digest:
         if run_duration_min < 1.0 and len(grand) == 0:
             log("⚠️  Run completed in < 1 min with 0 leads — suppressing email.")
         else:
             log("\n📧 Sending email digest (run complete)…")
-            
-            # This looks up the specific client's email from GitHub Secrets
             client_email = os.environ.get(CLIENT_EMAIL_VAR, "")
             if not client_email:
-                log(f"⚠️ Warning: GitHub Secret {CLIENT_EMAIL_VAR} not found. Email may not send.")
-                
-            os.environ["GMAIL_TO"] = client_email 
-            
+                log(f"⚠️  GitHub Secret '{CLIENT_EMAIL_VAR}' not set — email may not send.")
+            os.environ["GMAIL_TO"] = client_email
             email_digest.send_digest(
                 grand, summary, failed,
                 date_from, date_to,
@@ -3823,8 +3989,10 @@ def run():
                 run_duration_min=run_duration_min,
                 log_fn=log,
             )
+    elif not _email_digest_ok:
+        log("ℹ️  Email skipped (email_digest.py not found — check core/ folder)")
     else:
-        log("ℹ️  Email skipped (Colab mode — set GMAIL_APP_PASSWORD)")
+        log("ℹ️  Email skipped (GMAIL_APP_PASSWORD not set)")
         
 # ── Authenticate Google ──────────────────────────────────────
 # In GitHub Actions: GCP_SERVICE_ACCOUNT_JSON env var is set — no action needed here.
