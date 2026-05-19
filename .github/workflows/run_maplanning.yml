@@ -50,6 +50,7 @@ jobs:
           GMAIL_FROM:               ${{ secrets.GMAIL_FROM }}
           GMAIL_APP_PASSWORD:       ${{ secrets.GMAIL_APP_PASSWORD }}
           GMAIL_TO_MAPLANNING:      ${{ secrets.GMAIL_TO_MAPLANNING }}
+          OPENAI_API_KEY:           ${{ secrets.OPENAI_API_KEY }}
           SCRAPE_BATCH:             ${{ matrix.batch }}
           # Stop scraping ~10 min before the 180-min job timeout so the engine
           # can flush remaining leads and send the email digest. Without this,
