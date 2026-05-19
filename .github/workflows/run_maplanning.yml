@@ -10,6 +10,17 @@ on:
         required: false
         default: '2'
 
+# Serialize runs so a manual trigger + the scheduled trigger can't both write
+# to the same Google Sheet at once (gspread has no row-level locking — last
+# write wins, which produces duplicate rows or column-shift corruption).
+concurrency:
+  group: maplanning-scrape
+  cancel-in-progress: false
+
+# Minimal permissions — workflow only reads code, never writes back.
+permissions:
+  contents: read
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -27,6 +38,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
         run: pip install -r requirements.txt

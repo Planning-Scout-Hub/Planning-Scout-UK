@@ -1657,12 +1657,12 @@ Be direct and commercially specific. No padding. No generic phrases."""
                 headers={"x-api-key": _ai_key_anth,
                          "anthropic-version": "2023-06-01",
                          "Content-Type": "application/json"},
-                json={"model": "claude-opus-4-5",
+                json={"model": "claude-opus-4-7",
                       "max_tokens": 220,
                       "temperature": 0.2,
                       "system": "You are a specialist UK planning consultant. Write concise, commercially useful assessments.",
                       "messages": [{"role": "user", "content": _ai_prompt}]},
-                timeout=30
+                timeout=60
             )
             if _ai_r.status_code == 200:
                 lead["ai_evaluation"] = _ai_r.json()["content"][0]["text"].strip()
@@ -1682,7 +1682,7 @@ Be direct and commercially specific. No padding. No generic phrases."""
                       "max_tokens": 220,
                       "temperature": 0.2,
                       "messages": [{"role": "user", "content": _ai_prompt}]},
-                timeout=30
+                timeout=60
             )
             if _ai_r2.status_code == 200:
                 lead["ai_evaluation"] = _ai_r2.json()["choices"][0]["message"]["content"].strip()
@@ -3296,10 +3296,23 @@ def scrape_council(council, base_url, date_from, date_to):
             log(f"  ❌ {it.get('ref','?')}: {_we}")
 
     _threads = []
+    _aborted = False
     for idx, item in enumerate(all_items):
+        if not time_ok(need_s=60):
+            log(f"  ⏰ Runtime budget low — stopping {council} at {idx}/{len(all_items)} apps")
+            break
         log(f"\n  [{idx+1}/{len(all_items)}]")
+        # Bounded spin-wait: if all workers stall on a slow portal this
+        # used to loop forever until GitHub killed the job. Cap at 5 min.
+        _spin_deadline = time.time() + 300
         while sum(1 for t in _threads if t.is_alive()) >= _MAX_W:
+            if time.time() > _spin_deadline or not time_ok(need_s=60):
+                log(f"  ⏰ Worker slots stuck — skipping rest of {council}", 1)
+                _aborted = True
+                break
             time.sleep(0.3)
+        if _aborted:
+            break
         _t = _thr.Thread(target=_worker, args=(item,), daemon=True)
         _t.start()
         _threads.append(_t)
@@ -3933,7 +3946,8 @@ def run():
                                     log(f"  🎯 {_item['ref']}: "
                                         f"{len(_nl['competitors'])} competitors nearby")
                         time.sleep(0.8)
-                    except Exception:
+                    except Exception as _kw_err:
+                        log(f"  ⚠️  {_nc_name} kw='{_kw}': {str(_kw_err)[:60]}", 2)
                         continue
             except Exception as _nce:
                 log(f"  ⚠️  {_nc_name} (new apps): {str(_nce)[:60]}")
