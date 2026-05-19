@@ -1,11 +1,14 @@
-import subprocess, sys
-try:
-    subprocess.check_call([sys.executable, "-m", "pip", "install",
-        "requests", "beautifulsoup4", "pdfplumber", "gspread",
-        "google-auth", "anthropic", "-q", "--disable-pip-version-check"],
-        timeout=120)
-except Exception as _pip_err:
-    print(f"⚠️  pip install warning: {_pip_err} (continuing — packages may already be installed)")
+import os, subprocess, sys
+# Auto-install in Colab only. GitHub Actions / CI installs via requirements.txt,
+# so re-running pip wastes ~30s of the runtime budget and clutters logs.
+if not (os.environ.get("GITHUB_ACTIONS") or os.environ.get("CI")):
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install",
+            "requests", "beautifulsoup4", "pdfplumber", "gspread",
+            "google-auth", "-q", "--disable-pip-version-check"],
+            timeout=120)
+    except Exception as _pip_err:
+        print(f"⚠️  pip install warning: {_pip_err} (continuing — packages may already be installed)")
 
 import requests, re, io, time, urllib3, socket
 from datetime import datetime, timedelta
@@ -162,7 +165,6 @@ args, _unknown = parser.parse_known_args()
 WEEKS_TO_SCRAPE = args.weeks
 RUN_MODE        = args.mode
 
-import sys, os
 # Make sure core/ is in path so email_digest is found whether running from
 # repo root (python core/engine.py) or from core/ directly
 _engine_dir = os.path.dirname(os.path.abspath(__file__))
@@ -662,11 +664,27 @@ def preflight_check(councils):
                 dead[name] = reason
                 log(f"  ❌ {name:25s} {reason} — skipping")
 
-    # Include geo_blocked in the live set — scrape_council will skip gracefully if still blocked
-    combined_live = {**dict(sorted(live.items())), **dict(sorted(geo_blocked.items()))}
+    # Geo-blocked handling:
+    # - Default (Colab / UK IP): include them — they usually work.
+    # - SKIP_GEO_BLOCKED=1 (set by the GitHub Actions workflow): exclude them.
+    #   On US-routed runners each blocked council burns 1-3 min of timeouts
+    #   without ever returning data, which is the main reason matrix batches
+    #   used to hit the 180-min job timeout. Skipping preserves runtime budget
+    #   for the ~125 councils that DO respond from Actions, without changing
+    #   any scraping/scoring logic for them. Run manually from Colab for the
+    #   remaining ~25 councils when full coverage is needed.
+    _skip_geo = os.environ.get("SKIP_GEO_BLOCKED", "").strip().lower() in ("1", "true", "yes")
+    if _skip_geo and geo_blocked:
+        log(f"  ⏭️  SKIP_GEO_BLOCKED=1 — excluding {len(geo_blocked)} geo-blocked councils from this run")
+        combined_live = dict(sorted(live.items()))
+    else:
+        combined_live = {**dict(sorted(live.items())), **dict(sorted(geo_blocked.items()))}
 
     log(f"\n  ✅ {len(live):3d} directly reachable")
-    log(f"  🌍 {len(geo_blocked):3d} geo-blocked from this IP (included, try Colab for these)")
+    if _skip_geo:
+        log(f"  ⏭️  {len(geo_blocked):3d} geo-blocked (skipped — run from Colab/UK IP for full coverage)")
+    else:
+        log(f"  🌍 {len(geo_blocked):3d} geo-blocked from this IP (included, try Colab for these)")
     log(f"  ❌ {len(dead):3d} truly dead (DNS / no Idox form)")
     log(f"  ─── Scraping {len(combined_live)} councils total")
     log("=" * 60)
@@ -4005,4 +4023,18 @@ if not os.environ.get("GCP_SERVICE_ACCOUNT_JSON"):
     except Exception:
         pass  # already authenticated or running locally
 
-run()
+# Wrap run() so any uncaught exception lands in the workflow log with a
+# full traceback instead of GitHub's generic "This job failed" message.
+try:
+    run()
+except KeyboardInterrupt:
+    print("\n⏹️  Interrupted")
+    sys.exit(130)
+except Exception:
+    import traceback
+    print("\n" + "=" * 60)
+    print("❌ ENGINE CRASHED — uncaught exception")
+    print("=" * 60)
+    traceback.print_exc()
+    print("=" * 60, flush=True)
+    sys.exit(1)

@@ -38,6 +38,15 @@ jobs:
           GMAIL_APP_PASSWORD:       ${{ secrets.GMAIL_APP_PASSWORD }}
           GMAIL_TO_MAPLANNING:      ${{ secrets.GMAIL_TO_MAPLANNING }}
           SCRAPE_BATCH:             ${{ matrix.batch }}
+          # Stop scraping ~10 min before the 180-min job timeout so the engine
+          # can flush remaining leads and send the email digest. Without this,
+          # the engine's default 5.5h budget runs until GitHub force-kills it
+          # — which is why the job used to fail with no traceback.
+          MAX_RUNTIME_HOURS:        "2.8"
+          # ~25 of the ~150 UK council Idox portals reject GitHub's US-routed
+          # IPs, burning 1-3 min each on timeouts. Skip them here; run manually
+          # from Colab (UK IP) when full coverage is needed.
+          SKIP_GEO_BLOCKED:         "1"
         run: |
-          WEEKS=${{ github.event.inputs.weeks || '2' }}
-          python core/engine.py --weeks 2
+          WEEKS="${{ github.event.inputs.weeks || '2' }}"
+          python core/engine.py --weeks "$WEEKS"
