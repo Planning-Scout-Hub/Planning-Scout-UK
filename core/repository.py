@@ -107,10 +107,12 @@ class LeadFilters:
 
     council: Optional[str] = None              # exact match, case-insensitive
     councils: Optional[list[str]] = None       # OR over multiple councils
+    app_type: Optional[str] = None             # substring match (e.g. "Full", "Outline")
     min_score: Optional[int] = None
     max_score: Optional[int] = None
     decision: Optional[str] = None             # substring match (e.g. "REFUSED")
     winability: Optional[str] = None           # HIGH / MEDIUM / LOW
+    max_days_to_appeal: Optional[int] = None   # only leads with known deadline ≤ N
     text_contains: Optional[str] = None        # substring across address/description/triggers
     enforcement_only: bool = False
     limit: Optional[int] = None                # cap result size after filtering
@@ -325,6 +327,13 @@ class LeadRepository:
                 continue
             if winability and lead.winability.upper() != winability:
                 continue
+            if f.app_type and f.app_type.lower() not in lead.app_type.lower():
+                continue
+            if f.max_days_to_appeal is not None:
+                # Excludes leads with unknown deadlines — caller asked for a
+                # max remaining window, and "Unknown" can't satisfy that.
+                if lead.days_to_appeal is None or lead.days_to_appeal > f.max_days_to_appeal:
+                    continue
             if f.enforcement_only and not lead.is_enforcement:
                 continue
             if text:
