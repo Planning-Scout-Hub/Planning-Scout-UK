@@ -869,11 +869,22 @@ def get_weekly_lead_count():
                     except ValueError:
                         score_int = 0  # Fallback if the cell is blank or has weird text
                     weekly_leads.append({
-                        "council": row[0] if row else "",
-                        "ref":     row[1] if len(row) > 1 else "",
-                        "desc":    row[3][:80] if len(row) > 3 else "",
-                        "score":   row[11] if len(row) > 11 else "",
-                        "date":    date_found_str,
+                        "council":      row[0] if row else "",
+                        "ref":          row[1] if len(row) > 1 else "",
+                        "addr":         row[2] if len(row) > 2 else "",
+                        "desc":         row[3][:80] if len(row) > 3 else "",
+                        "applicant":    row[5] if len(row) > 5 else "",
+                        "agent":        row[6] if len(row) > 6 else "",
+                        "date_dec":     row[8] if len(row) > 8 else "",
+                        "triggers":     row[10] if len(row) > 10 else "",
+                        "score":        score_int,
+                        "portal":       row[13] if len(row) > 13 else "",
+                        "est_value":    row[24] if len(row) > 24 else "",
+                        "developer":    row[25] if len(row) > 25 else "",
+                        "architect":    row[26] if len(row) > 26 else "",
+                        "impact_prob":  0, 
+                        "contact_link": row[30] if len(row) > 30 else "",
+                        "date":         date_found_str,
                     })
             except Exception:
                 continue
