@@ -62,8 +62,11 @@ COL = dict(
     applicant=5, agent=6, date_rec=7, date_dec=8,
     decision=9, triggers=10, score=11, keyword=12,
     portal=13, dec_doc=14, date_found=15, comments=16,
-    est_value=17, developer=18, architect=19,
-    impact_prob=20, ch_number=21, reg_addr=22, contact_link=23
+    ai_eval=17, winability=18, rec_action=19, top_trigger=20, 
+    est_work_time=21, days_to_appeal=22, appeal_urgency=23,
+    est_value=24, developer=25, architect=26,
+    impact_prob=27, ch_number=28, reg_addr=29, contact_link=30,
+    is_enforcement=31
 )
 
 def cell(row, key):
