@@ -640,10 +640,38 @@ def preflight_check(councils):
             except requests.exceptions.ConnectionError as e:
                 if _is_dns_error(e):
                     return name, base_url, "DNS", 0
-                # Non-DNS ConnErr = geo-IP block. Do NOT skip — include in scrape.
+                # RECOVERY PASS: a 15s ConnErr is not proof of geo-blocking —
+                # plenty of council portals are simply slow to hand-shake.
+                # Retry once with a 40s timeout and UK browser headers before
+                # condemning. This recovers councils that SKIP_GEO_BLOCKED=1
+                # was silently dropping from every run.
+                try:
+                    _s2 = new_session()
+                    _s2.headers.update({
+                        "Accept-Language": "en-GB,en;q=0.9",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    })
+                    _r2 = _s2.get(test_url, timeout=40, allow_redirects=True, verify=False)
+                    if _r2.status_code == 200 and "keyval" in _r2.text.lower()[:200000]:
+                        return name, base_url, "ok", _r2.status_code
+                    if _r2.status_code == 200 and BeautifulSoup(_r2.text, "html.parser").find("form"):
+                        return name, base_url, "ok", _r2.status_code
+                except Exception:
+                    pass
                 return name, base_url, "geo_blocked", 0
             except requests.exceptions.Timeout:
-                # Timeout from GitHub US almost always = geo-IP block, not a dead server.
+                # Same recovery pass for plain timeouts.
+                try:
+                    _s2 = new_session()
+                    _s2.headers.update({
+                        "Accept-Language": "en-GB,en;q=0.9",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    })
+                    _r2 = _s2.get(test_url, timeout=40, allow_redirects=True, verify=False)
+                    if _r2.status_code == 200 and BeautifulSoup(_r2.text, "html.parser").find("form"):
+                        return name, base_url, "ok", _r2.status_code
+                except Exception:
+                    pass
                 return name, base_url, "geo_blocked", 0
             except Exception as e:
                 return name, base_url, f"Err:{type(e).__name__}", 0
@@ -733,6 +761,9 @@ SHEET_HEADERS = [
     "Contact Link",       # 31
     # ── Flags (col 32) ────────────────────────────────────────────────────
     "Is Enforcement",     # 32
+    # ── Mark's requested tags (col 33-34) ────────────────────────────────
+    "Location Tag",       # 33  ← Out of Centre / Edge of Centre / In Centre
+    "Change of Use To",   # 34  ← the "to X" target use, e.g. "to Class E"
 ]
 
 _ws           = None   # cached worksheet
@@ -946,6 +977,8 @@ def write_lead(lead):
         lead.get("contact_link", ""),                # col 31: Contact Link
         # ── Flags (col 32) ────────────────────────────────────────────────
         lead.get("is_enforcement", ""),              # col 32: Is Enforcement
+        lead.get("location_tag",   ""),              # col 33: Location Tag
+        lead.get("change_of_use_to", ""),            # col 34: Change of Use To
     ]
 
     # Safety check: row must be exactly as wide as SHEET_HEADERS
@@ -1101,6 +1134,16 @@ def _score_retail(desc, triggers):
     if "class e"        in d: s += 10
     if "use class e"    in d: s += 10
     if "change of use"  in d: s += 8
+    # Mark's "to" rule: a change of use TO a retail/Class E use is the target
+    # pattern. Score the directional match, not just the phrase "change of use".
+    for _tu in ("to class e", "to retail", "to a retail", "to shop", "to a shop",
+                "to supermarket", "to a supermarket", "to convenience",
+                "to comparison", "to cafe", "to café", "to restaurant",
+                "to hot food", "to takeaway", "to drive-through", "to drive thru",
+                "to gym", "to a gym", "to office", "to hotel", "to use class e"):
+        if _tu in d:
+            s += 14
+            break
     for w in ("gym", "fitness", "hair", "beauty", "salon",
               "nail", "barber", "café", "cafe", "coffee",
               "restaurant", "hot food", "takeaway", "office", "clinic"):
@@ -1112,6 +1155,12 @@ def _score_retail(desc, triggers):
     if "retail park"  in d: s += 5
     if "convenience"  in d: s += 5
     if "shop"         in d: s += 3
+    # New-build / erection of retail floorspace is as much a Mark lead as a
+    # change of use — a TC3 sequential refusal on a new retail unit was
+    # scoring 58 (below the 60 threshold) purely because the description
+    # scoring only rewarded change-of-use wording.
+    if "retail unit"  in d: s += 8
+    elif "retail"     in d: s += 6
     # Drive-through: almost always out-of-centre, always needs sequential test
     if any(w in d for w in ("drive-through","drive through","drive thru","drivethrough")): s += 12
     # Discount food retail: highest sequential test refusal rate
@@ -1830,6 +1879,50 @@ Be direct and commercially specific. No padding. No generic phrases."""
             f"**First action:** {_action} (Est. win rate: {_win})"
         )
         log("  🤖 AI evaluation: rule-based fallback (set ANTHROPIC_API_KEY for LLM analysis)", 2)
+
+    # ── 0a. Mark's requested tags ───────────────────────────────────────────
+    # (i) Location tag — Mark asked for automatic Out of Centre / Edge of
+    #     Centre tagging wherever those phrases appear in the refusal reasons.
+    # (ii) Change of Use "to X" — Mark's note: "All variants should include
+    #      'to' before the keyword". A refusal of a change of use TO a retail
+    #      or Class E use is the highest-value pattern in his funnel, so the
+    #      target use is captured as its own column and scored separately.
+    _tl = " ".join(triggers).lower()
+    _dl_tag = desc.lower()
+
+    if any(w in _tl or w in _dl_tag for w in
+           ("out of centre", "out-of-centre", "outside the town centre",
+            "outside a defined centre", "out of town", "out-of-town")):
+        lead["location_tag"] = "Out of Centre"
+    elif any(w in _tl or w in _dl_tag for w in
+             ("edge of centre", "edge-of-centre", "edge of the town centre")):
+        lead["location_tag"] = "Edge of Centre"
+    elif any(w in _tl or w in _dl_tag for w in
+             ("within the town centre", "in-centre", "primary shopping area")):
+        lead["location_tag"] = "In Centre"
+    else:
+        lead["location_tag"] = ""
+
+    # Capture what the change of use is TO — the words after "to"
+    _cou = ""
+    _m = re.search(
+        r'change of use[^.]{0,80}?\bto\b\s+([a-z0-9\s\-/&(),\.]{3,70})',
+        _dl_tag)
+    if _m:
+        _cou = _m.group(1).strip().rstrip(" .,;")[:70]
+    else:
+        # Fallback: any "to <retail-ish use>" phrasing
+        for _u in ("class e", "retail", "shop", "supermarket", "convenience",
+                   "comparison", "cafe", "café", "restaurant", "hot food",
+                   "takeaway", "drive-through", "gym", "office", "hotel"):
+            if f"to {_u}" in _dl_tag:
+                _cou = _u
+                break
+    lead["change_of_use_to"] = _cou
+    if _cou:
+        log(f"  🔀 Change of use to: {_cou}", 2)
+    if lead["location_tag"]:
+        log(f"  📍 {lead['location_tag']}", 2)
 
     # ── 0b. Estimated Work Time for Mark ────────────────────────────────────
     # Based on appeal type and complexity, estimate Mark's hours to complete.
