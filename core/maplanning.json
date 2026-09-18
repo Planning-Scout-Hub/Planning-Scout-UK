@@ -1,48 +1,97 @@
 {
   "client_id": "maplanning",
-  "client_name": "MAPlanning",
+  "client_name": "MAPlanning / Hadley Brooks Consultancy",
+  "client_type": "retail",
   "sheet_id": "172bpv-b2_nK5ENE1XPk5rWeokvnr1sjHvLBfVzHWh6c",
   "email_to_secret_name": "GMAIL_TO_MAPLANNING",
   "min_lead_score": 60,
-  "preferred_documents": ["Decision Notice"],
+
   "search_keywords": [
-    "Class E", "change of use", "use class e", "shop", "retail", "supermarket", 
-    "convenience", "food store", "discount store", "café", "cafe", "restaurant", 
-    "hot food", "takeaway", "coffee shop", "gym", "fitness", "hair", "beauty", 
-    "nail", "barber", "health centre", "clinic", "office", "workspace", 
-    "sui generis", "betting", "amusement", "car wash", "mixed use", "pharmacy", 
-    "optician", "drive-through", "drive through", "food and drink"
+    "class e", "use class e", "change of use", "shop", "retail",
+    "supermarket", "convenience", "food store", "discount store",
+    "retail park", "cafe", "café", "restaurant", "hot food", "takeaway",
+    "drive-through", "drive thru", "coffee shop", "public house",
+    "gym", "fitness", "leisure", "hair", "beauty", "nail", "barber",
+    "clinic", "health centre", "pharmacy", "optician", "day nursery",
+    "office", "workspace", "employment", "industrial", "warehouse",
+    "hotel", "aparthotel", "visitor accommodation", "holiday",
+    "sui generis", "betting", "amusement", "car wash", "mixed use",
+    "petrol filling", "showroom", "storage and distribution",
+    "enforcement notice", "breach of condition",
+    "outline planning", "erection of", "demolition"
   ],
+
   "pdf_triggers": [
-    "out of centre", "out-of-centre", "outside the town centre", "outside a defined centre", 
-    "edge of centre", "edge-of-centre", "edge of the town centre", "sequential", 
-    "sequential test", "sequential approach", "sequential assessment", "sequential preference", 
-    "sequential search", "sequential step", "no sequential", "fails the sequential", 
-    "failed the sequential", "fail the sequential", "sequentially preferable", 
-    "lack of evidence", "insufficient evidence", "no evidence", "lack of information", 
-    "insufficient information", "failure to demonstrate", "failed to demonstrate", 
-    "fails to demonstrate", "not demonstrated", "has not demonstrated", "cannot demonstrate", 
-    "unable to demonstrate", "no information provided", "no assessment", "has not been submitted", 
-    "not been submitted", "not been provided", "has not been provided", "was not submitted", 
-    "absence of", "in the absence of", "retail impact assessment", "retail impact study", 
-    "harm to the vitality and viability", "harm to the vitality", "adverse impact on the vitality", 
-    "undermine the vitality", "prejudice the vitality", "no identified need", "no quantitative need", 
-    "no qualitative need", "need has not been", "need has not been demonstrated", "no overriding need", 
-    "need not been established", "unmet need", "no need has been", "insufficient justification", 
-    "failed to justify", "fails to justify", "not justified"
+    "policy tc3", "tc3(2)", "tc3(4)", "policy tc1", "policy tc2",
+    "sustainable transport modes", "policy dp3", "policy pm6",
+    "national development management polic", "ndmp",
+    "materially inconsistent", "very limited weight",
+    "annex a paragraph 2", "national decision-making polic",
+
+    "paragraph 91", "paragraph 90", "paragraph 87", "paragraph 88",
+
+    "sequential test", "sequential approach", "sequential assessment",
+    "sequential preference", "sequential search", "sequentially preferable",
+    "fails the sequential", "failed the sequential", "no sequential",
+    "office sequential", "flood risk sequential",
+    "sequential and exception test", "exception test",
+    "policy f5", "flood zone 2", "flood zone 3",
+    "flood risk assessment", "sustainable drainage",
+
+    "out of centre", "out-of-centre", "outside the town centre",
+    "outside a defined centre", "edge of centre", "edge-of-centre",
+    "primary shopping area", "defined centre",
+
+    "retail impact assessment", "retail impact study", "retail impact",
+    "impact assessment", "2,500 sq", "2500 sq",
+    "harm to the vitality", "vitality and viability",
+    "undermine the vitality", "prejudice the vitality",
+    "adverse impact on the town centre", "town centre health check",
+    "retail capacity", "town centre audit",
+
+    "needs assessment", "capacity assessment", "quantitative need",
+    "qualitative need", "no identified need", "no overriding need",
+    "need has not been demonstrated", "employment land review",
+    "employment needs assessment", "loss of employment land",
+    "employment floorspace", "loss of open space",
+    "open space assessment", "playing field", "recreational open space",
+
+    "lack of evidence", "insufficient evidence", "no evidence",
+    "lack of information", "insufficient information",
+    "failure to demonstrate", "failed to demonstrate",
+    "fails to demonstrate", "not demonstrated", "has not demonstrated",
+    "cannot demonstrate", "unable to demonstrate",
+    "has not been submitted", "not been provided",
+    "has not been provided", "in the absence of",
+    "insufficient justification", "failed to justify", "not justified",
+
+    "unreasonable behaviour", "award of costs", "costs application",
+    "no reasonable prospect", "failed to substantiate",
+    "vague and generalised", "unsubstantiated",
+
+    "enforcement notice", "breach of condition notice",
+    "breach of planning control", "unauthorised development",
+    "requires the following steps",
+
+    "call for sites", "land promotion", "strategic allocation",
+    "local plan allocation", "five year housing land supply",
+    "tilted balance"
   ],
+
   "exclude_words": [
-    "discharge of condition", "discharge of planning condition", "reserved matters", 
-    "approval of details", "approval of reserved", "details reserved by condition", 
-    "condition discharge", "certificate of lawful", 
-    "advertisement consent", "listed building consent", "hedgerow removal", 
-    "non-material amendment", "minor material amendment", "section 73", "s73", "screening opinion", 
-    "scoping opinion", "environmental impact assessment screening", "prior notification", 
-    "class ma", "part 6", "part 7", "notification under", "prior notification under", 
-    "telecommunications", "street works", "temporary structure", "HMO", "House in Multiple Occupation", 
-    "Hostel", "C4 use", "Sui Generis HMO", "prior approval", "lawful development", 
-    "tree preservation", "single storey extension",
-    "loft conversion", "porch", "garage alteration"
+    "discharge of condition", "discharge of planning condition",
+    "reserved matters", "approval of details", "approval of reserved",
+    "details reserved by condition", "condition discharge",
+    "non-material amendment", "minor material amendment",
+    "section 73", "s73", "variation of condition",
+    "tree preservation", "tree works", "tpo", "hedgerow removal",
+    "advertisement consent", "listed building consent",
+    "screening opinion", "scoping opinion",
+    "environmental impact assessment screening",
+    "prior notification", "telecommunications", "5g mast",
+    "street works", "temporary structure",
+    "single storey rear extension", "single-storey rear extension",
+    "loft conversion", "dormer window", "porch", "boundary fence",
+    "certificate of lawful", "cleud", "clopud"
   ]
 }
-
