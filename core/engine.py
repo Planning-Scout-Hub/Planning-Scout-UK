@@ -1118,6 +1118,89 @@ def _score_retail(desc, triggers):
     if any(w in d for w in ("aldi","lidl","iceland","home bargains","b&m","farmfoods",
                              "food warehouse","poundland","savers")): s += 10
 
+    # ══════════════════════════════════════════════════════════════════
+    # NPPF August 2026 + Hadley Brooks' wider service lines
+    # The Aug-2026 NPPF renumbered everything to policy codes — TC3 replaced
+    # paragraph 91. Decisions issued from ~17 Aug 2026 cite codes, not paras.
+    # These signals also cover services the engine was completely blind to:
+    # flood risk sequential test, office sequential test, hotel/employment
+    # needs, open space, enforcement and award-of-costs appeals.
+    # ══════════════════════════════════════════════════════════════════
+
+    # NDMP conflict — highest-value NEW appeal ground. Local plan policies
+    # materially inconsistent with the 79 National Development Management
+    # Policies now carry very limited weight, yet councils are still refusing
+    # on them. Very few agents have caught up.
+    for w in ("national development management polic", " ndmp",
+              "materially inconsistent", "very limited weight",
+              "policy pm6", "annex a paragraph 2"):
+        if w in tw:
+            s += 22
+            break
+
+    # Aug-2026 sequential test policy codes (supersede "paragraph 91")
+    for w in ("policy tc3", "tc3(2)", "tc3(4)", " tc3 ",
+              "sustainable transport modes", "policy tc1", "policy tc2"):
+        if w in tw:
+            s += 18
+            break
+
+    # Flood Risk Sequential Test — a listed Hadley Brooks service with
+    # previously zero engine coverage. Policy F5 in the Aug-2026 NPPF.
+    for w in ("flood risk sequential", "sequential test for flood",
+              "policy f5", "flood zone 2", "flood zone 3",
+              "sequential and exception test", "exception test",
+              "sustainable drainage", "suds"):
+        if w in tw or w in d:
+            s += 16
+            break
+
+    # Office / employment sequential test + needs assessments
+    for w in ("office sequential", "employment land review",
+              "employment needs assessment", "loss of employment land",
+              "employment floorspace", "office to residential"):
+        if w in tw or w in d:
+            s += 14
+            break
+
+    # Hotel & leisure needs — C1 hotels are expressly main town centre uses
+    for w in ("hotel", "aparthotel", "visitor accommodation",
+              "needs assessment", "capacity assessment"):
+        if w in d or w in tw:
+            s += 10
+            break
+
+    # Open space assessment
+    for w in ("loss of open space", "open space assessment", "playing field",
+              "recreational open space", "amenity open space"):
+        if w in tw or w in d:
+            s += 12
+            break
+
+    # Award of Costs appeals — unreasonable LPA behaviour. High-margin add-on
+    # that Mark already offers but the engine never flagged.
+    for w in ("unreasonable behaviour", "award of costs", "costs application",
+              "no reasonable prospect", "failed to substantiate",
+              "vague and generalised", "unsubstantiated"):
+        if w in tw:
+            s += 15
+            break
+
+    # Enforcement appeals — 28-day window, urgent
+    for w in ("enforcement notice", "breach of condition notice",
+              "breach of planning control", "unauthorised development"):
+        if w in d or w in tw:
+            s += 12
+            break
+
+    # Town centre studies/audits + land promotion
+    for w in ("town centre health check", "vitality and viability study",
+              "retail capacity", "town centre audit", "call for sites",
+              "land promotion", "strategic allocation", "local plan allocation"):
+        if w in tw or w in d:
+            s += 8
+            break
+
     # Penalise non-leads
     for bad in (
         "discharge of condition", "discharge of planning condition",
@@ -3272,7 +3355,14 @@ def scrape_council(council, base_url, date_from, date_to):
         log(f"  ❌ Session warmup failed — {council} unreachable, skipping")
         return []
 
-    for kw in RETAIL_KEYWORDS:
+    for _kwi, kw in enumerate(RETAIL_KEYWORDS):
+        # CRITICAL: the keyword loop previously had NO budget check. With 30+
+        # keywords against a slow portal a single council could run 20-40 min,
+        # so the engine never returned to the outer loop's check and GitHub
+        # force-killed the job at the 180-min timeout with no traceback.
+        if not time_ok(need_s=300):
+            log(f"  ⏰ Budget low — stopping {council} keywords at {_kwi}/{len(RETAIL_KEYWORDS)}", 1)
+            break
         try:
             items = search_one_keyword(sess, base_url, kw, date_from, date_to)
             new   = [i for i in items
@@ -3309,7 +3399,7 @@ def scrape_council(council, base_url, date_from, date_to):
     _threads = []
     _aborted = False
     for idx, item in enumerate(all_items):
-        if not time_ok(need_s=60):
+        if not time_ok(need_s=360):
             log(f"  ⏰ Runtime budget low — stopping {council} at {idx}/{len(all_items)} apps")
             break
         log(f"\n  [{idx+1}/{len(all_items)}]")
@@ -3317,7 +3407,7 @@ def scrape_council(council, base_url, date_from, date_to):
         # used to loop forever until GitHub killed the job. Cap at 5 min.
         _spin_deadline = time.time() + 300
         while sum(1 for t in _threads if t.is_alive()) >= _MAX_W:
-            if time.time() > _spin_deadline or not time_ok(need_s=60):
+            if time.time() > _spin_deadline or not time_ok(need_s=360):
                 log(f"  ⏰ Worker slots stuck — skipping rest of {council}", 1)
                 _aborted = True
                 break
@@ -3329,7 +3419,7 @@ def scrape_council(council, base_url, date_from, date_to):
         _threads.append(_t)
         time.sleep(0.3)
     for _t in _threads:
-        _t.join(timeout=90)
+        _t.join(timeout=45)
 
     qualified = sorted(_q_results, key=lambda x: x.get("score",0), reverse=True)
 
@@ -3881,7 +3971,7 @@ def run():
     total   = len(live_councils)
 
     for idx, (name, url) in enumerate(live_councils.items()):
-        if not time_ok(need_s=90):
+        if not time_ok(need_s=420):   # 7 min reserve for Sheets read + email digest
             log(f"\n⏰ Runtime budget low — stopping after {idx}/{total} councils")
             log(f"   ({total-idx} councils skipped: {', '.join(list(live_councils.keys())[idx:idx+5])}…)")
             break
@@ -3935,7 +4025,7 @@ def run():
 
         # Scan each live council for new applications
         for _nc_name, _nc_url in live_councils.items():
-            if not time_ok(need_s=45):
+            if not time_ok(need_s=420):   # competitor scan must also leave email headroom
                 log("⏰ Time budget low — stopping competitor scan"); break
             try:
                 _nsess = new_session()
@@ -3972,7 +4062,22 @@ def run():
 
     # ── Step 4: count leads added in the past 7 days from the sheet ────────
     # This runs AFTER scraping so newly-written leads are included in the count.
-    weekly_count, weekly_leads = get_weekly_lead_count()
+    #
+    # CRASH FIX: this call used to be unprotected. Google service-account
+    # tokens expire after 60 min, and the module-level `_ws` worksheet is
+    # cached for the whole run. On a 2h48m run the first Sheets call after
+    # the scrape loop raised gspread.APIError, which propagated to the
+    # top-level handler and produced "ENGINE CRASHED — uncaught exception"
+    # with no leads emailed. Dropping the cache forces a fresh authenticated
+    # client, and the try/except guarantees the digest still goes out.
+    global _ws
+    _ws = None
+    weekly_count, weekly_leads = 0, []
+    try:
+        weekly_count, weekly_leads = get_weekly_lead_count()
+    except Exception as _wce:
+        log(f"⚠️  Weekly count failed ({type(_wce).__name__}: {str(_wce)[:100]})")
+        log("   Continuing to email digest with this run's leads only.")
 
     # ── Final report ─────────────────────────────────────────
     print(f"\n{'='*60}")
@@ -4024,14 +4129,20 @@ def run():
             if not client_email:
                 log(f"⚠️  GitHub Secret '{CLIENT_EMAIL_VAR}' not set — email may not send.")
             os.environ["GMAIL_TO"] = client_email
-            email_digest.send_digest(
-                grand, summary, failed,
-                date_from, date_to,
-                weekly_count=weekly_count,
-                weekly_leads=weekly_leads,
-                run_duration_min=run_duration_min,
-                log_fn=log,
-            )
+            try:
+                email_digest.send_digest(
+                    grand, summary, failed,
+                    date_from, date_to,
+                    weekly_count=weekly_count,
+                    weekly_leads=weekly_leads,
+                    run_duration_min=run_duration_min,
+                    log_fn=log,
+                )
+            except Exception as _mail_err:
+                import traceback
+                log(f"❌ Email digest failed: {type(_mail_err).__name__}: {_mail_err}")
+                traceback.print_exc()
+                log("   Leads ARE saved in the Google Sheet — only the email failed.")
     elif not _email_digest_ok:
         log("ℹ️  Email skipped (email_digest.py not found — check core/ folder)")
     else:
