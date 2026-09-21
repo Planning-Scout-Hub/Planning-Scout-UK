@@ -121,7 +121,6 @@
     "defined centre",
     "lack of evidence",
     "insufficient evidence",
-    "no evidence",
     "lack of information",
     "insufficient information",
     "failure to demonstrate",
@@ -137,7 +136,6 @@
     "has not been provided",
     "no information has been provided",
     "in the absence of",
-    "absence of",
     "no assessment",
     "insufficient justification",
     "failed to justify",
@@ -201,7 +199,10 @@
     "restricted goods",
     "bulky goods",
     "open retail",
-    "unrestricted class e"
+    "unrestricted class e",
+    "no evidence has been",
+    "no evidence was submitted",
+    "no evidence to demonstrate"
   ],
   "exclude_words": [
     "discharge of condition",
