@@ -764,6 +764,7 @@ SHEET_HEADERS = [
     # ── Mark's requested tags (col 33-34) ────────────────────────────────
     "Location Tag",       # 33  ← Out of Centre / Edge of Centre / In Centre
     "Change of Use To",   # 34  ← the "to X" target use, e.g. "to Class E"
+    "Appeal Status",      # 35  ← "None lodged" = open opportunity
 ]
 
 _ws           = None   # cached worksheet
@@ -846,6 +847,9 @@ def get_sheet():
         log(f"❌ Sheets connection failed: {e}")
         return None
 
+def _dedupe_key(council, ref):
+    return f"{str(council).strip().lower()}|{str(ref).strip().lower()}"
+
 def load_existing_refs():
     """
     Load all existing reference numbers from column B into memory.
@@ -856,8 +860,11 @@ def load_existing_refs():
     if not ws:
         return
     try:
-        refs = sheets_retry(lambda: ws.col_values(2))
-        _existing_refs = set(refs[1:])  # skip header row
+        # Key on council + ref. Refs like "25/00123/FUL" are reused across
+        # councils, so ref-only dedupe silently dropped genuine leads whenever
+        # another council had already produced the same reference number.
+        rows = sheets_retry(lambda: ws.get_values("A:B"))
+        _existing_refs = {_dedupe_key(r[0], r[1]) for r in rows[1:] if len(r) >= 2 and r[1]}
         log(f"✅ Loaded {len(_existing_refs)} existing refs (dedup cache)")
     except Exception as e:
         log(f"⚠️  Could not load existing refs: {e} — duplicate check may miss some")
@@ -933,7 +940,7 @@ def write_lead(lead):
         return False
 
     # Fast in-memory dedup check
-    if lead["ref"] in _existing_refs:
+    if _dedupe_key(lead["council"], lead["ref"]) in _existing_refs:
         log(f"  ⏭️  Duplicate: {lead['ref']}")
         return False
 
@@ -979,6 +986,7 @@ def write_lead(lead):
         lead.get("is_enforcement", ""),              # col 32: Is Enforcement
         lead.get("location_tag",   ""),              # col 33: Location Tag
         lead.get("change_of_use_to", ""),            # col 34: Change of Use To
+        lead.get("appeal_status", ""),               # col 35: Appeal Status
     ]
 
     # Safety check: row must be exactly as wide as SHEET_HEADERS
@@ -989,7 +997,7 @@ def write_lead(lead):
     try:
         # Use lambda here to match your retry logic
         sheets_retry(lambda: ws.append_row(row_data))
-        _existing_refs.add(lead["ref"]) 
+        _existing_refs.add(_dedupe_key(lead["council"], lead["ref"]))
 
         try:
             all_rows   = sheets_retry(lambda: ws.get_all_values())
@@ -1773,7 +1781,8 @@ def enrich_lead(lead):
     _ai_key_oai  = os.environ.get("OPENAI_API_KEY",    "").strip()
     lead["ai_evaluation"] = ""
 
-    _ai_prompt = f"""You are a specialist UK retail and Class E planning consultant working at MAPlanning consultancy.
+    _ai_prompt = f"""You are a specialist UK retail and Class E planning consultant working at Hadleybrooks Consultancy (MAPlanning).
+IMPORTANT: the NPPF was replaced in August 2026 and now uses policy codes — Policy TC3 is the sequential test (formerly paragraph 91). Always cite policy codes. Never cite old NPPF paragraph numbers.
 Mark, the consultant, needs to quickly decide whether to pursue this refused planning application as an appeal case.
 
 APPLICATION DETAILS:
@@ -1785,7 +1794,7 @@ Lead Score: {score}/100
 
 Write a concise 3-part assessment using EXACTLY this format (include the bold labels, keep total under 130 words):
 
-**Why refused:** [One sentence — the specific planning policy failure. Cite NPPF paragraph, policy name, or test that was failed. E.g. "Refused on sequential test grounds — applicant failed to demonstrate no suitable town centre sites, contrary to NPPF para 86."]
+**Why refused:** [One sentence — the specific planning policy failure. Cite the NPPF policy code, the local plan policy, or the test failed. E.g. "Refused on sequential test grounds — no assessment of sequentially preferable sites, contrary to NPPF Policy TC3 and Local Plan Policy R1."]
 
 **Appeal grounds:** [One sentence — what Mark can argue and how strong it is. E.g. "Strong grounds: inspector will require sequential search evidence; applicant has none on record, making this highly winnable on written representations."]
 
@@ -2913,6 +2922,8 @@ def get_details(sess, base_url, key_val):
             value = td.get_text(strip=True)
             if   label == "proposal":                                d["proposal"] = value
             elif label == "address":                                 d["address"]  = value
+            elif "appeal status" in label or "appeal decision" in label:
+                d["appeal_status"] = value
             elif label in ("decision issued date", "decision date",
                            "date of decision", "date decision issued"): d["date_dec"] = value
             elif label in ("application validated", "date validated",
@@ -3083,6 +3094,25 @@ def _resolve_viewdoc(sess, url, base_url, soup_of_doc_tab=None):
     except Exception:
         return url, None
 
+_RANKED_DOCS = {}   # key_val -> (ranked candidates, documents-tab soup)
+
+def find_report_doc(sess, base_url, key_val, exclude_url):
+    """Best officer / delegated / committee report for this application,
+    excluding the document already scanned. Returns (url, prefetched) or (None, None)."""
+    ranked, soup = _RANKED_DOCS.get(key_val, ([], None))
+    for c in ranked:
+        lab = (c.get("label") or "").lower()
+        if c["url"] == exclude_url or "appeal" in lab:
+            continue
+        if any(w in lab for w in ("officer", "delegated", "committee report",
+                                  "case officer", "report", "od report")):
+            try:
+                return _resolve_viewdoc(sess, c["url"], base_url, soup_of_doc_tab=soup)
+            except Exception as e:
+                log(f"  ⚠️  Report resolve failed: {e}", 2)
+                return None, None
+    return None, None
+
 def find_decision_doc(sess, base_url, key_val, custom_scores=None): # Add custom_scores here
     """
     Fetch the Documents tab and find the best decision notice.
@@ -3194,6 +3224,8 @@ def find_decision_doc(sess, base_url, key_val, custom_scores=None): # Add custom
     for cand in ranked[:3]:
         log(f"    score={cand['score']:3d} | {cand['label'][:55]}", 2)
 
+    _RANKED_DOCS[key_val] = (ranked, soup)
+
     # Take best candidate
     best = ranked[0]
     log(f"  → Best: score={best['score']} | {best['url'][-65:]}", 2)
@@ -3253,6 +3285,23 @@ _REFUSAL_PHRASES = [
     "has been refused",
 ]
 
+def _ocr_pdf(content, max_pages=4):
+    """OCR the first pages of a scanned PDF. Needs the tesseract-ocr system
+    package (installed by the workflow) and pytesseract. Degrades to "" if absent."""
+    try:
+        import pytesseract
+    except ImportError:
+        return ""
+    out = ""
+    try:
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            for pg in pdf.pages[:max_pages]:
+                img = pg.to_image(resolution=200).original
+                out += pytesseract.image_to_string(img).lower() + " "
+    except Exception as e:
+        log(f"  ⚠️  OCR error: {e}", 2)
+    return out
+
 def scan_pdf(sess, pdf_url, prefetched_response=None):
     """
     Download and scan a PDF for:
@@ -3310,8 +3359,12 @@ def scan_pdf(sess, pdf_url, prefetched_response=None):
                     text += t.lower() + " "
 
         if not text.strip():
-            log(f"  ⚠️  No extractable text — scanned image PDF?", 2)
-            return [], False
+            log(f"  🖼️  Image-only PDF — attempting OCR", 2)
+            text = _ocr_pdf(r.content)
+            if not text.strip():
+                log(f"  ⚠️  OCR unavailable or produced no text", 2)
+                return [], False
+            log(f"  🔤 OCR recovered {len(text):,} chars", 2)
 
         log(f"  {len(text):,} chars extracted", 2)
 
@@ -3404,6 +3457,10 @@ def process_app(sess, base_url, council, item):
     if not desc_is_candidate(item["desc"]):
         return None
 
+    if _dedupe_key(council, ref) in _existing_refs:
+        log(f"  ⏭️  Already in sheet — skip", 2)
+        return None
+
     det = get_details(sess, base_url, kv)
 
     # Pre-filter 1: skip clearly non-refused decisions immediately
@@ -3431,7 +3488,8 @@ def process_app(sess, base_url, council, item):
         "approve",  # some portals use bare 'Approve'
     ]
     
-    if decision_raw:
+    _dec_is_refusal = any(w in decision_raw for w in ("refus", "split"))
+    if decision_raw and not _dec_is_refusal:
         if any(w in decision_raw for w in _NON_REFUSAL):
             log(f"  ⏭️  Portal says '{det.get('decision','')}' — skip", 2)
             return None
@@ -3448,11 +3506,23 @@ def process_app(sess, base_url, council, item):
 
     triggers, is_refused = scan_pdf(sess, doc_url, prefetched_response=prefetched)
 
+    # Fallback: decision notice gave no triggers (terse reasons, or unreadable)
+    # → read the officer/delegated report, where the evidential failures are spelt out.
+    if not triggers:
+        rep_url, rep_pre = find_report_doc(sess, base_url, kv, doc_url)
+        if rep_url:
+            log(f"  📄 Notice had no triggers — reading officer report", 2)
+            t2, r2 = scan_pdf(sess, rep_url, prefetched_response=rep_pre)
+            if t2:
+                triggers = t2
+                is_refused = is_refused or r2
+    _RANKED_DOCS.pop(kv, None)   # free memory
+
     # Gate 1: must have explicit refusal language in PDF
     if not is_refused:
         # Fallback: check the decision field from the portal itself
         decision_raw = det.get("decision", "").lower()
-        portal_refused = any(w in decision_raw for w in ("refus", "refuse", "refused"))
+        portal_refused = any(w in decision_raw for w in ("refus", "split"))
         if not portal_refused:
             log(f"  ❌ Not confirmed as refused (PDF + portal both lack refusal language) — skip")
             return None
@@ -3467,6 +3537,13 @@ def process_app(sess, base_url, council, item):
     log(f"  🏆 QUALIFIED — Triggers: {triggers}")
     desc = det.get("proposal", item["desc"])
     sc   = score_lead(desc, triggers, client_type=CLIENT_TYPE)
+
+    _ap = (det.get("appeal_status") or "").strip()
+    _ap_live = bool(_ap) and _ap.lower() not in (
+        "unknown", "not available", "n/a", "none", "no appeal", "-", "not appealed")
+    if _ap_live:
+        log(f"  ⚖️  Appeal already on file: '{_ap}' — deprioritised", 2)
+        sc = max(10, sc - 15)
     log(f"  Score: {sc}/100")
 
     # ── Minimum score gate ────────────────────────────────────────────────
@@ -3497,6 +3574,7 @@ def process_app(sess, base_url, council, item):
         "keyword":   item["keyword"],
         "url":       f"{base_url}/applicationDetails.do?activeTab=summary&keyVal={kv}",
         "doc_url":   doc_url,
+        "appeal_status": _ap if _ap_live else "None lodged",
     }
     # Sales intelligence enrichment (safe in thread — no Sheets I/O)
     enrich_lead(lead)
@@ -3575,15 +3653,28 @@ def scrape_council(council, base_url, date_from, date_to):
     _q_results = []
     _MAX_W = 3
 
-    def _worker(it):
+    import queue as _queue
+    _pool = _queue.Queue()
+    _pool.put(sess)                       # search session is already warm
+
+    def _get_sess():
         try:
-            _ws = new_session()
-            _warmup_portal_session(_ws, base_url)
+            return _pool.get_nowait()
+        except _queue.Empty:
+            _s = new_session()
+            _warmup_portal_session(_s, base_url)
+            return _s
+
+    def _worker(it):
+        _ws = _get_sess()
+        try:
             _lead = process_app(_ws, base_url, council, it)
             if _lead:
                 with _lock: _q_results.append(_lead)
         except Exception as _we:
             log(f"  ❌ {it.get('ref','?')}: {_we}")
+        finally:
+            _pool.put(_ws)
 
     _threads = []
     _aborted = False
@@ -3859,13 +3950,13 @@ EXISTING NEARBY OPERATORS (potential clients for MAPlanning's objection service)
 
 The objection MUST cover all four of these grounds:
 
-1. SEQUENTIAL TEST (NPPF paras 88-90, 2024):
+1. SEQUENTIAL TEST (NPPF Aug 2026, Policy TC3):
    The applicant has not demonstrated adequate sequential search. The sequential approach
    requires proposals for main town centre uses in out-of-centre locations to first consider
    sequentially preferable in-centre and edge-of-centre sites. Without a robust Sequential
    Test Assessment, permission should be refused.
 
-2. RETAIL IMPACT ASSESSMENT (NPPF para 91, 2024):
+2. RETAIL IMPACT ASSESSMENT (NPPF Aug 2026 town centre impact policy):
    For retail proposals exceeding the locally-defined impact threshold, a Retail Impact
    Assessment is required. The application does not appear to be accompanied by a sufficient
    assessment of impact on the vitality and viability of existing centres.
@@ -3953,7 +4044,7 @@ I write on behalf of {_comp_summary} to object to the above application on the f
 
 1. FAILURE OF SEQUENTIAL TEST (NPPF 2024, paragraphs 88-90)
 The application does not demonstrate that a sequential assessment has been undertaken. 
-NPPF paragraph 89 requires applicants for main town centre uses in out-of-centre locations 
+NPPF Policy TC3 requires applicants for main town centre uses in out-of-centre locations 
 to demonstrate that there are no sequentially preferable sites available. In the absence 
 of a Sequential Test Assessment, the application should be refused.
 
@@ -4229,7 +4320,7 @@ def run():
                         _items = search_one_keyword(
                             _nsess, _nc_url, _kw, date_from, date_to)
                         for _item in _items[:3]:  # max 3 per keyword per council
-                            if _item["ref"] in _existing_refs:
+                            if _dedupe_key(_nc_name, _item["ref"]) in _existing_refs:
                                 continue
                             _nl = process_new_application(
                                 _nsess, _nc_url, _nc_name, _item)
