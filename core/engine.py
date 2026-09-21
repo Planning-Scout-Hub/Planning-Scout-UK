@@ -2562,6 +2562,80 @@ def search_one_keyword(sess, base_url, keyword, date_from, date_to):
     return []
 
 
+
+# ════════════════════════════════════════════════════════════
+# REFUSAL SWEEP — one search per council instead of one per keyword
+# ════════════════════════════════════════════════════════════
+# The old strategy POSTed the search form once PER KEYWORD (69 searches per
+# council, doubled by the no-refusal-filter fallback). At ~15 min of pure
+# searching per council, each 2.8h batch reached ~11 of its ~48 councils —
+# roughly 22% UK coverage per run.
+#
+# New strategy: ask each portal ONCE for every application REFUSED in the
+# decision-date window (blank description). A typical council refuses 5-60
+# applications a fortnight, so this is 1-3 result pages. Keyword matching then
+# happens locally on the result descriptions, which costs nothing — so the
+# keyword list can be as long as Mark likes without touching runtime.
+
+import re as _re_sweep
+_KW_PATTERNS = None
+
+def _build_kw_patterns():
+    """Word-boundary patterns so 'shop' doesn't match 'workshop' and
+    'office' doesn't match 'officer'. Optional plural 's'."""
+    global _KW_PATTERNS
+    pats = []
+    for kw in RETAIL_KEYWORDS:
+        k = kw.lower().strip()
+        if k:
+            pats.append(_re_sweep.compile(r'(?<![a-z])' + _re_sweep.escape(k) + r's?(?![a-z])'))
+    _KW_PATTERNS = pats
+    return pats
+
+def desc_is_candidate(desc):
+    """True if a refused application's description is worth opening.
+    Must match a client keyword AND contain no exclusion phrase."""
+    d = (desc or "").lower()
+    if not d:
+        return False
+    if any(ex.lower() in d for ex in EXCLUDE_WORDS):
+        return False
+    pats = _KW_PATTERNS or _build_kw_patterns()
+    return any(p.search(d) for p in pats)
+
+# Compact list used ONLY if a portal refuses the blank-description sweep.
+FALLBACK_KEYWORDS = CLIENT_CONFIG.get("fallback_search_keywords") or [
+    "retail", "class e", "shop", "change of use", "supermarket",
+    "convenience", "restaurant", "takeaway", "hot food", "office",
+    "hotel", "gym",
+]
+
+def sweep_refusals(sess, base_url, council, date_from, date_to):
+    """
+    Returns a list of result items (ref, keyVal, desc…) for every refused
+    application decided in the window. Returns None if the sweep could not
+    run at all (caller should fall back to keyword mode).
+    """
+    items, form = _do_post(sess, base_url, "", date_from, date_to, with_refused=True)
+    if form is None:
+        return None                      # form unreadable — use keyword fallback
+    if items:
+        log(f"  🧹 Sweep: {len(items)} refusals in window", 1)
+        return items
+    # 0 results. If the portal's 'refused' option was never identified, the
+    # engine guessed "REF", which silently matches nothing on some portals.
+    # Sweep once more with no decision filter; process_app re-checks the
+    # decision on every candidate, so granted applications are still dropped.
+    if not form.get("refused"):
+        log(f"  🧹 Refused code not detected — sweeping all decisions", 1)
+        time.sleep(1.5)
+        items2, _ = _do_post(sess, base_url, "", date_from, date_to, with_refused=False)
+        if items2:
+            log(f"  🧹 Sweep (all decisions): {len(items2)} results", 1)
+            return items2
+    return []                            # genuinely nothing, or portal rejects blank search
+
+
 MAX_PAGES = 30   # hard cap — no portal has 30 pages of retail refusals
 
 def collect_pages(sess, base_url, first_resp, keyword):
@@ -3308,8 +3382,8 @@ def process_app(sess, base_url, council, item):
         "certificate of lawful",
         "advertisement consent", "listed building consent",
         "hedgerow removal",
-        "non-material amendment", "minor material amendment",
-        "section 73", "s73",
+        "non-material amendment",
+        # s73 / variation refusals kept: restricted-goods appeals are core retail work
         "screening opinion", "scoping opinion",
         "environmental impact assessment screening",
         "prior notification", "prior approval",
@@ -3327,7 +3401,7 @@ def process_app(sess, base_url, council, item):
         return None  # administrative — not a planning lead
 
     # Must have at least one retail/Class E keyword in the description
-    if not any(kw.lower() in _dl for kw in RETAIL_KEYWORDS[:25]):
+    if not desc_is_candidate(item["desc"]):
         return None
 
     det = get_details(sess, base_url, kv)
@@ -3448,26 +3522,48 @@ def scrape_council(council, base_url, date_from, date_to):
         log(f"  ❌ Session warmup failed — {council} unreachable, skipping")
         return []
 
-    for _kwi, kw in enumerate(RETAIL_KEYWORDS):
-        # CRITICAL: the keyword loop previously had NO budget check. With 30+
-        # keywords against a slow portal a single council could run 20-40 min,
-        # so the engine never returned to the outer loop's check and GitHub
-        # force-killed the job at the 180-min timeout with no traceback.
-        if not time_ok(need_s=300):
-            log(f"  ⏰ Budget low — stopping {council} keywords at {_kwi}/{len(RETAIL_KEYWORDS)}", 1)
-            break
-        try:
-            items = search_one_keyword(sess, base_url, kw, date_from, date_to)
-            new   = [i for i in items
-                     if i["keyVal"] not in {x["keyVal"] for x in all_items}]
-            for i in new:
-                i["keyword"] = kw
-            all_items.extend(new)
-            # Longer delay for rate-sensitive councils
-            kw_sleep = SLOW_COUNCILS.get(base_url, SLOW_COUNCILS.get(base_url.rstrip('/'), 1.0))
-            time.sleep(kw_sleep)
-        except Exception as e:
-            log(f"  ❌ Keyword '{kw}': {e}")
+    # ── Step A: one sweep for every refusal in the window ────────────────
+    swept = sweep_refusals(sess, base_url, council, date_from, date_to)
+
+    # ── Step B: fallback — only if the sweep itself could not run or came
+    #    back empty (some portals reject a blank description). Uses a short
+    #    keyword list WITH the refusal filter; never the unfiltered retry.
+    if not swept:
+        if swept is None:
+            log(f"  ↩️  Sweep unavailable — keyword fallback ({len(FALLBACK_KEYWORDS)} terms)", 1)
+        else:
+            log(f"  ↩️  Sweep empty — confirming with keyword fallback", 1)
+        swept = []
+        _seen = set()
+        for _kwi, kw in enumerate(FALLBACK_KEYWORDS):
+            if not time_ok(need_s=300):
+                log(f"  ⏰ Budget low — stopping {council} fallback at {_kwi}/{len(FALLBACK_KEYWORDS)}", 1)
+                break
+            try:
+                _it, _f = _do_post(sess, base_url, kw, date_from, date_to, with_refused=True)
+                if _f is None and _kwi == 0:
+                    log(f"  ❌ Search form unusable on {council} — skipping", 1)
+                    break
+                for i in _it:
+                    if i["keyVal"] not in _seen:
+                        _seen.add(i["keyVal"]); i["keyword"] = kw; swept.append(i)
+                time.sleep(SLOW_COUNCILS.get(base_url, SLOW_COUNCILS.get(base_url.rstrip('/'), 1.0)))
+            except Exception as e:
+                log(f"  ❌ Fallback '{kw}': {e}", 1)
+
+    # ── Step C: local keyword + exclusion filter (free) ──────────────────
+    _seen_kv = set()
+    for i in swept:
+        if i["keyVal"] in _seen_kv:
+            continue
+        _seen_kv.add(i["keyVal"])
+        if not desc_is_candidate(i.get("desc", "")):
+            continue
+        if not i.get("keyword"):
+            _d = i.get("desc", "").lower()
+            i["keyword"] = next((k for k in RETAIL_KEYWORDS if k.lower() in _d), "sweep")
+        all_items.append(i)
+    log(f"  🔍 {len(swept)} refusals checked → {len(all_items)} match Mark's brief", 1)
 
     log(f"\n  {len(all_items)} unique applications to scan")
 
@@ -4043,18 +4139,23 @@ def run():
 
     # ── Step 2: pre-flight — fast parallel check ───────────
     # ── Step 2: pre-flight — fast parallel check ───────────
-    live_councils, _dead = preflight_check(COUNCILS)
-    if not live_councils:
-        print("❌ No reachable councils — check network"); return
+    # ── Batch slicing BEFORE preflight ───────────────────────────────────
+    # Bug fixed: each of the 4 matrix jobs used to preflight all 193 councils
+    # and then slice the *survivors*. Preflight results differ per job
+    # (network flakiness), so the slices shifted and councils fell between
+    # batches or were scanned twice. Slicing the static, sorted list first
+    # makes every batch deterministic — and cuts preflight time by 4x.
+    _batch = os.environ.get("SCRAPE_BATCH", "1/1")
+    _bnum, _btotal = int(_batch.split("/")[0]), int(_batch.split("/")[1])
+    _all   = sorted(COUNCILS.items())
+    _size  = -(-len(_all) // _btotal)
+    _mine  = dict(_all[(_bnum - 1) * _size : _bnum * _size])
+    log(f"Batch {_bnum}/{_btotal}: {len(_mine)} councils assigned")
 
-    # ── Batch slicing (set SCRAPE_BATCH env var e.g. "2/4") ─  # NEW
-    _batch = os.environ.get("SCRAPE_BATCH", "1/1")              # NEW
-    _bnum, _btotal = int(_batch.split("/")[0]), int(_batch.split("/")[1])  # NEW
-    _items = list(live_councils.items())                         # NEW
-    _size  = -(-len(_items) // _btotal)                         # NEW
-    _slice = _items[(_bnum - 1) * _size : _bnum * _size]        # NEW
-    live_councils = dict(_slice)                                 # NEW
-    log(f"Batch {_bnum}/{_btotal}: {len(live_councils)} councils")  # NEW
+    live_councils, _dead = preflight_check(_mine)
+    if not live_councils:
+        print("❌ No reachable councils in this batch — check network"); return
+    log(f"Batch {_bnum}/{_btotal}: {len(live_councils)} of {len(_mine)} reachable")
 
     # ── Step 3: scrape every live council ───────────────────
     import random
