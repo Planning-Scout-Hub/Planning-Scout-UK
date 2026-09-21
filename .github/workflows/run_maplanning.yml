@@ -10,20 +10,18 @@ on:
         required: false
         default: '2'
 
-# Serialize runs so a manual trigger + the scheduled trigger can't both write
-# to the same Google Sheet at once (gspread has no row-level locking — last
-# write wins, which produces duplicate rows or column-shift corruption).
 concurrency:
   group: maplanning-scrape
   cancel-in-progress: false
 
-# Minimal permissions — workflow only reads code, never writes back.
 permissions:
   contents: read
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    # Pinned: 'ubuntu-latest' moves to Ubuntu 26 on 19 Oct 2026 (the notice in
+    # your run). Pinning avoids a surprise breakage mid-campaign.
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     strategy:
       fail-fast: false
@@ -31,11 +29,12 @@ jobs:
         batch: ["1/4", "2/4", "3/4", "4/4"]
 
     steps:
+      # v5 / v6 run natively on Node 24 — clears the Node 20 deprecation warnings.
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -52,14 +51,7 @@ jobs:
           GMAIL_TO_MAPLANNING:      ${{ secrets.GMAIL_TO_MAPLANNING }}
           OPENAI_API_KEY:           ${{ secrets.OPENAI_API_KEY }}
           SCRAPE_BATCH:             ${{ matrix.batch }}
-          # Stop scraping ~10 min before the 180-min job timeout so the engine
-          # can flush remaining leads and send the email digest. Without this,
-          # the engine's default 5.5h budget runs until GitHub force-kills it
-          # — which is why the job used to fail with no traceback.
           MAX_RUNTIME_HOURS:        "2.8"
-          # ~25 of the ~150 UK council Idox portals reject GitHub's US-routed
-          # IPs, burning 1-3 min each on timeouts. Skip them here; run manually
-          # from Colab (UK IP) when full coverage is needed.
           SKIP_GEO_BLOCKED:         "1"
         run: |
           WEEKS="${{ github.event.inputs.weeks || '2' }}"
