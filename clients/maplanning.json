@@ -5,7 +5,7 @@
   "sheet_id": "172bpv-b2_nK5ENE1XPk5rWeokvnr1sjHvLBfVzHWh6c",
   "email_to_secret_name": "GMAIL_TO_MAPLANNING",
   "min_lead_score": 60,
-  "_brief": "Refusals only (Status=Decided, Decision=Refused). The first 25 search_keywords double as the description gate in process_app, so Mark's high-precision 'to X' variants are listed FIRST on purpose — do not reorder.",
+  "_brief": "Refusals only (Status=Decided, Decision=Refused). The engine sweeps every refusal in the window ONCE per council, then filters descriptions locally against search_keywords with word-boundary matching — so this list can grow freely with no runtime cost. fallback_search_keywords are only used when a portal rejects the sweep.",
   "search_keywords": [
     "to class e",
     "to use class e",
@@ -75,7 +75,17 @@
     "car wash",
     "petrol filling",
     "showroom",
-    "mixed use"
+    "mixed use",
+    "variation of condition",
+    "removal of condition",
+    "sale of food",
+    "open a1",
+    "unrestricted retail",
+    "bulky goods",
+    "garden centre",
+    "trade counter",
+    "click and collect",
+    "mezzanine"
   ],
   "pdf_triggers": [
     "sequential test",
@@ -185,7 +195,13 @@
     "enforcement notice",
     "breach of condition notice",
     "breach of planning control",
-    "unauthorised development"
+    "unauthorised development",
+    "range of goods",
+    "restriction on the sale",
+    "restricted goods",
+    "bulky goods",
+    "open retail",
+    "unrestricted class e"
   ],
   "exclude_words": [
     "discharge of condition",
@@ -204,10 +220,6 @@
     "part 6",
     "part 7",
     "non-material amendment",
-    "minor material amendment",
-    "section 73",
-    "s73",
-    "variation of condition",
     "tree preservation",
     "tree works",
     "tpo",
@@ -234,5 +246,19 @@
     "hmo",
     "house in multiple occupation",
     "hostel"
+  ],
+  "fallback_search_keywords": [
+    "retail",
+    "class e",
+    "shop",
+    "change of use",
+    "supermarket",
+    "convenience",
+    "restaurant",
+    "takeaway",
+    "hot food",
+    "office",
+    "hotel",
+    "gym"
   ]
 }
